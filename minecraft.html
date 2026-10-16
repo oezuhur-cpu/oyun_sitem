@@ -1,0 +1,607 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Block Survival</title>
+<style>
+*{box-sizing:border-box}
+html,body{margin:0;width:100%;height:100%;overflow:hidden;background:#111;font-family:Arial}
+#game{position:fixed;inset:0}
+#hud{
+ position:fixed;left:15px;top:15px;color:white;
+ text-shadow:2px 2px #000;font-weight:bold;z-index:5;
+}
+.bar{width:230px;height:22px;background:#222;border:2px solid #111;margin:5px 0}
+.fill{height:100%;width:100%;transition:.2s}
+#health{background:#d92323}
+#food{background:#e89b20}
+#info{
+ position:fixed;left:50%;bottom:20px;transform:translateX(-50%);
+ color:white;background:#0009;padding:10px 18px;border-radius:8px;
+ z-index:5;text-align:center;
+}
+#crosshair{
+ position:fixed;left:50%;top:50%;transform:translate(-50%,-50%);
+ color:white;font-size:25px;z-index:6;pointer-events:none;
+}
+#inventory{
+ position:fixed;right:15px;top:15px;color:white;background:#0009;
+ padding:12px;border-radius:8px;z-index:5;
+}
+.slot{margin:4px 0}
+#start{
+ position:fixed;inset:0;background:linear-gradient(#4ca6e8,#1d5723);
+ display:flex;align-items:center;justify-content:center;
+ flex-direction:column;color:white;z-index:20;
+}
+#start h1{font-size:52px;text-shadow:4px 4px #000;margin:10px}
+#start button{
+ font-size:22px;padding:15px 35px;border:0;border-radius:8px;
+ cursor:pointer;background:#69c34a;color:white;font-weight:bold;
+ box-shadow:0 5px #285d20;
+}
+</style>
+</head>
+<body>
+
+<div id="game"></div>
+
+<div id="start">
+<h1>BLOCK SURVIVAL</h1>
+<p>Özgün Minecraft tarzı Survival</p>
+<button onclick="startGame()">OYUNA BAŞLA</button>
+</div>
+
+<div id="crosshair">+</div>
+
+<div id="hud">
+❤️ CAN
+<div class="bar"><div id="health" class="fill"></div></div>
+🍖 AÇLIK
+<div class="bar"><div id="food" class="fill"></div></div>
+</div>
+
+<div id="inventory">
+<b>ENVANTER</b>
+<div class="slot">🟫 Toprak: <span id="dirt">20</span></div>
+<div class="slot">🟩 Çimen: <span id="grass">5</span></div>
+<div class="slot">🪵 Odun: <span id="wood">5</span></div>
+<div class="slot">🪨 Taş: <span id="stone">10</span></div>
+<div class="slot">🥩 Yemek: <span id="meat">5</span></div>
+</div>
+
+<div id="info">
+WASD: Hareket | SPACE: Zıpla | Sol Tık: Kır | Sağ Tık: Koy<br>
+1 Toprak | 2 Çimen | 3 Odun | 4 Taş | F Yemek
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.min.js"></script>
+
+<script>
+/* =========================================================
+   BLOCK SURVIVAL
+   Özgün Minecraft tarzı 3D survival prototipi
+========================================================= */
+
+let scene,camera,renderer,clock;
+let started=false;
+
+const blocks=[];
+const enemies=[];
+const keys={};
+
+let health=100;
+let food=100;
+
+let inventory={
+ dirt:20,
+ grass:5,
+ wood:5,
+ stone:10,
+ meat:5
+};
+
+let selected="dirt";
+let velocityY=0;
+let onGround=false;
+let gameTime=0;
+
+const BLOCK=1;
+const WORLD=42;
+
+const materials={
+ grass:new THREE.MeshLambertMaterial({color:0x4caf3b}),
+ dirt:new THREE.MeshLambertMaterial({color:0x79502d}),
+ stone:new THREE.MeshLambertMaterial({color:0x777777}),
+ wood:new THREE.MeshLambertMaterial({color:0x8b542f}),
+ leaves:new THREE.MeshLambertMaterial({color:0x2e8b35}),
+ sand:new THREE.MeshLambertMaterial({color:0xd7c27a}),
+ water:new THREE.MeshLambertMaterial({
+   color:0x3498db,transparent:true,opacity:.65
+ })
+};
+
+const geometry=new THREE.BoxGeometry(1,1,1);
+
+function startGame(){
+ document.getElementById("start").style.display="none";
+ started=true;
+ init();
+ document.body.requestPointerLock();
+}
+
+function init(){
+
+ scene=new THREE.Scene();
+ scene.background=new THREE.Color(0x87ceeb);
+
+ camera=new THREE.PerspectiveCamera(
+   75,
+   innerWidth/innerHeight,
+   .1,
+   1000
+ );
+
+ camera.position.set(0,5,8);
+
+ renderer=new THREE.WebGLRenderer({antialias:true});
+ renderer.setSize(innerWidth,innerHeight);
+ renderer.shadowMap.enabled=true;
+ document.getElementById("game").appendChild(renderer.domElement);
+
+ clock=new THREE.Clock();
+
+ const sun=new THREE.DirectionalLight(0xffffff,1.2);
+ sun.position.set(30,60,20);
+ sun.castShadow=true;
+ scene.add(sun);
+
+ scene.add(new THREE.HemisphereLight(
+   0x87ceeb,
+   0x355b2d,
+   .65
+ ));
+
+ generateWorld();
+
+ for(let i=0;i<8;i++){
+   spawnEnemy();
+ }
+
+ addEvents();
+
+ animate();
+}
+
+function heightAt(x,z){
+
+ let h=
+   3+
+   Math.sin(x*.18)*1.5+
+   Math.cos(z*.21)*1.5+
+   Math.sin((x+z)*.11)*1.3;
+
+ return Math.max(1,Math.floor(h));
+}
+
+function addBlock(x,y,z,type){
+
+ const m=new THREE.Mesh(geometry,materials[type]||materials.dirt);
+
+ m.position.set(x,y,z);
+ m.castShadow=true;
+ m.receiveShadow=true;
+
+ m.userData.type=type;
+
+ scene.add(m);
+ blocks.push(m);
+
+ return m;
+}
+
+function generateWorld(){
+
+ for(let x=-WORLD;x<=WORLD;x++){
+
+   for(let z=-WORLD;z<=WORLD;z++){
+
+     const h=heightAt(x,z);
+
+     for(let y=0;y<=h;y++){
+
+       let type="dirt";
+
+       if(y===h) type="grass";
+       else if(y<1) type="stone";
+
+       addBlock(x,y,z,type);
+     }
+
+     if(Math.random()<.025 && Math.abs(x)>3 && Math.abs(z)>3){
+       createTree(x,h+1,z);
+     }
+   }
+ }
+
+ // küçük su gölü
+ for(let x=-7;x<4;x++){
+   for(let z=-5;z<4;z++){
+
+     const h=heightAt(x,z);
+
+     if(h<=3){
+       addBlock(x,3.15,z,"water");
+     }
+   }
+ }
+}
+
+function createTree(x,y,z){
+
+ for(let i=0;i<4;i++){
+   addBlock(x,y+i,z,"wood");
+ }
+
+ for(let dx=-2;dx<=2;dx++){
+   for(let dz=-2;dz<=2;dz++){
+
+     for(let dy=2;dy<=3;dy++){
+
+       if(Math.abs(dx)+Math.abs(dz)<4){
+         addBlock(x+dx,y+dy,z+dz,"leaves");
+       }
+     }
+   }
+ }
+}
+
+function addEvents(){
+
+ document.addEventListener("keydown",e=>{
+   keys[e.code]=true;
+
+   if(e.code==="Digit1") selected="dirt";
+   if(e.code==="Digit2") selected="grass";
+   if(e.code==="Digit3") selected="wood";
+   if(e.code==="Digit4") selected="stone";
+
+   if(e.code==="KeyF"){
+     if(inventory.meat>0 && food<100){
+       inventory.meat--;
+       food=Math.min(100,food+30);
+       updateHUD();
+     }
+   }
+ });
+
+ document.addEventListener("keyup",e=>{
+   keys[e.code]=false;
+ });
+
+ document.addEventListener("mousedown",e=>{
+
+   if(!started)return;
+
+   if(e.button===0) breakBlock();
+   if(e.button===2) placeBlock();
+ });
+
+ document.addEventListener("contextmenu",e=>e.preventDefault());
+
+ document.addEventListener("mousemove",e=>{
+
+   if(document.pointerLockElement===document.body){
+
+     camera.rotation.order="YXZ";
+
+     camera.rotation.y-=e.movementX*.002;
+     camera.rotation.x-=e.movementY*.002;
+
+     camera.rotation.x=Math.max(
+       -Math.PI/2,
+       Math.min(Math.PI/2,camera.rotation.x)
+     );
+   }
+ });
+
+ document.addEventListener("click",()=>{
+   if(started && document.pointerLockElement!==document.body){
+     document.body.requestPointerLock();
+   }
+ });
+
+ addEventListener("resize",()=>{
+   camera.aspect=innerWidth/innerHeight;
+   camera.updateProjectionMatrix();
+   renderer.setSize(innerWidth,innerHeight);
+ });
+}
+
+function getRay(){
+
+ const ray=new THREE.Raycaster();
+
+ ray.setFromCamera(
+   new THREE.Vector2(0,0),
+   camera
+ );
+
+ return ray;
+}
+
+function breakBlock(){
+
+ const hits=getRay().intersectObjects(blocks);
+
+ if(!hits.length)return;
+
+ const hit=hits[0];
+
+ if(hit.distance>7)return;
+
+ const b=hit.object;
+ const type=b.userData.type;
+
+ if(type==="water" || type==="leaves")return;
+
+ if(type==="wood") inventory.wood++;
+ else if(type==="stone") inventory.stone++;
+ else if(type==="grass") inventory.grass++;
+ else inventory.dirt++;
+
+ scene.remove(b);
+
+ const index=blocks.indexOf(b);
+
+ if(index>=0)blocks.splice(index,1);
+
+ updateHUD();
+}
+
+function placeBlock(){
+
+ if(!inventory[selected] || inventory[selected]<=0)return;
+
+ const hits=getRay().intersectObjects(blocks);
+
+ if(!hits.length)return;
+
+ const hit=hits[0];
+
+ if(hit.distance>7)return;
+
+ const p=hit.object.position.clone();
+ const n=hit.face.normal.clone();
+
+ p.add(n);
+
+ p.x=Math.round(p.x);
+ p.y=Math.round(p.y);
+ p.z=Math.round(p.z);
+
+ // oyuncunun içine blok koymayı engelle
+ const dx=Math.abs(p.x-camera.position.x);
+ const dy=Math.abs(p.y-camera.position.y);
+ const dz=Math.abs(p.z-camera.position.z);
+
+ if(dx<1 && dy<2 && dz<1)return;
+
+ addBlock(p.x,p.y,p.z,selected);
+
+ inventory[selected]--;
+
+ updateHUD();
+}
+
+function updatePlayer(dt){
+
+ const speed=6;
+
+ let direction=new THREE.Vector3();
+
+ if(keys.KeyW)direction.z-=1;
+ if(keys.KeyS)direction.z+=1;
+ if(keys.KeyA)direction.x-=1;
+ if(keys.KeyD)direction.x+=1;
+
+ direction.normalize();
+
+ const forward=new THREE.Vector3(
+   -Math.sin(camera.rotation.y),
+   0,
+   -Math.cos(camera.rotation.y)
+ );
+
+ const right=new THREE.Vector3(
+   Math.cos(camera.rotation.y),
+   0,
+   -Math.sin(camera.rotation.y)
+ );
+
+ const move=new THREE.Vector3();
+
+ move.addScaledVector(forward,direction.z);
+ move.addScaledVector(right,direction.x);
+
+ camera.position.x+=move.x*speed*dt;
+ camera.position.z+=move.z*speed*dt;
+
+ // zıplama
+ if(keys.Space && onGround){
+   velocityY=8;
+   onGround=false;
+ }
+
+ velocityY-=20*dt;
+ camera.position.y+=velocityY*dt;
+
+ const ground=heightAt(
+   Math.round(camera.position.x),
+   Math.round(camera.position.z)
+ )+1.7;
+
+ if(camera.position.y<ground){
+   camera.position.y=ground;
+   velocityY=0;
+   onGround=true;
+ }
+
+ // sınırlar
+ camera.position.x=Math.max(-WORLD,camera.position.x);
+ camera.position.x=Math.min(WORLD,camera.position.x);
+
+ camera.position.z=Math.max(-WORLD,camera.position.z);
+ camera.position.z=Math.min(WORLD,camera.position.z);
+}
+
+function spawnEnemy(){
+
+ const x=Math.floor(Math.random()*60)-30;
+ const z=Math.floor(Math.random()*60)-30;
+ const y=heightAt(x,z)+1;
+
+ const body=new THREE.Mesh(
+   new THREE.BoxGeometry(.7,.9,.7),
+   new THREE.MeshLambertMaterial({color:0x54302b})
+ );
+
+ body.position.set(x,y,z);
+ body.castShadow=true;
+
+ body.userData.enemy=true;
+ body.userData.hp=3;
+
+ scene.add(body);
+ enemies.push(body);
+}
+
+function updateEnemies(dt){
+
+ for(const e of enemies){
+
+   const dx=camera.position.x-e.position.x;
+   const dz=camera.position.z-e.position.z;
+
+   const distance=Math.sqrt(dx*dx+dz*dz);
+
+   if(distance<14){
+
+     e.position.x+=(dx/distance)*dt*1.4;
+     e.position.z+=(dz/distance)*dt*1.4;
+
+     if(distance<1.4){
+       health-=12*dt;
+       updateHUD();
+     }
+   }
+
+   e.position.y=heightAt(
+     Math.round(e.position.x),
+     Math.round(e.position.z)
+   )+1;
+ }
+}
+
+function updateWorldTime(dt){
+
+ gameTime+=dt*.7;
+
+ const cycle=(gameTime%120)/120;
+ const angle=cycle*Math.PI*2;
+
+ const sunX=Math.cos(angle)*60;
+ const sunY=Math.sin(angle)*60;
+
+ scene.children.forEach(obj=>{
+
+   if(obj.isDirectionalLight){
+     obj.position.set(sunX,sunY,20);
+
+     obj.intensity=Math.max(.15,sunY/60);
+   }
+ });
+
+ const brightness=Math.max(
+   .15,
+   Math.sin(angle)*.5+.5
+ );
+
+ scene.background=new THREE.Color().lerp(
+   new THREE.Color(0x071329),
+   new THREE.Color(0x87ceeb),
+   brightness
+ );
+}
+
+let hungerTimer=0;
+
+function survival(dt){
+
+ hungerTimer+=dt;
+
+ if(hungerTimer>8){
+
+   hungerTimer=0;
+
+   food=Math.max(0,food-2);
+
+   if(food===0){
+     health=Math.max(0,health-3);
+   }
+
+   updateHUD();
+ }
+
+ if(health<=0){
+
+   alert("Öldün! Yeniden başlatılıyor.");
+   location.reload();
+ }
+}
+
+function updateHUD(){
+
+ document.getElementById("health").style.width=
+   health+"%";
+
+ document.getElementById("food").style.width=
+   food+"%";
+
+ document.getElementById("dirt").textContent=
+   inventory.dirt;
+
+ document.getElementById("grass").textContent=
+   inventory.grass;
+
+ document.getElementById("wood").textContent=
+   inventory.wood;
+
+ document.getElementById("stone").textContent=
+   inventory.stone;
+
+ document.getElementById("meat").textContent=
+   inventory.meat;
+}
+
+function animate(){
+
+ requestAnimationFrame(animate);
+
+ const dt=Math.min(clock.getDelta(),.05);
+
+ if(started){
+
+   updatePlayer(dt);
+   updateEnemies(dt);
+   updateWorldTime(dt);
+   survival(dt);
+ }
+
+ renderer.render(scene,camera);
+}
+</script>
+<a href="index.html" aria-label="Ana sayfaya dön" title="Ana sayfa" style="position:fixed;right:16px;bottom:16px;z-index:2147483647;display:inline-flex;align-items:center;justify-content:center;min-height:44px;padding:0 16px;background:#d8f26a;color:#202820;border:2px solid #202820;border-radius:7px;font:700 14px Arial,sans-serif;text-decoration:none;box-shadow:3px 3px 0 #202820;">Ana sayfa</a>
+</body>
+</html>

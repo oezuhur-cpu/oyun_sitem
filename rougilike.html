@@ -1,0 +1,374 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+<meta charset="UTF-8">
+<title>Coddy'nin Maceraları</title>
+<style>
+    body {
+        margin: 0;
+        background: #111;
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        height: 100vh;
+        font-family: Arial, sans-serif;
+    }
+
+    canvas {
+        width: 600px;
+        height: 300px;
+        image-rendering: pixelated;
+        border: 3px solid white;
+        background: #4aa3df;
+    }
+</style>
+</head>
+
+<body>
+
+<canvas id="game" width="600" height="300"></canvas>
+
+<script>
+const canvas = document.getElementById("game");
+const ctx = canvas.getContext("2d");
+
+let gameOver = false;
+let puan = 0;
+
+const keys = {};
+
+document.addEventListener("keydown", e => {
+    keys[e.key.toLowerCase()] = true;
+
+    // Enter = yeniden başlat
+    if (e.key === "Enter" && gameOver) {
+        restart();
+    }
+
+    // Yukarı = zıplama
+    if (e.key === "ArrowUp" && !gameOver) {
+        jump();
+    }
+
+    // Aşağı = kaçınma
+    if (e.key === "ArrowDown" && !gameOver) {
+        evade();
+    }
+});
+
+document.addEventListener("keyup", e => {
+    keys[e.key.toLowerCase()] = false;
+});
+
+// -------------------------
+// OYUNCU
+// -------------------------
+
+const coddy = {
+    x: 50,
+    y: 240,
+    width: 40,
+    height: 50,
+    vy: 0,
+    jumping: false,
+    evading: false
+};
+
+// -------------------------
+// ENGELLER
+// -------------------------
+
+const fireball = {
+    x: 700,
+    y: 240,
+    width: 40,
+    height: 40
+};
+
+const fireball2 = {
+    x: 1000,
+    y: 150,
+    width: 40,
+    height: 40
+};
+
+// -------------------------
+// ÇARPIŞMA
+// -------------------------
+
+function collision(a, b) {
+    return (
+        a.x < b.x + b.width &&
+        a.x + a.width > b.x &&
+        a.y < b.y + b.height &&
+        a.y + a.height > b.y
+    );
+}
+
+// -------------------------
+// ZIPLAMA
+// -------------------------
+
+function jump() {
+    if (!coddy.jumping && !coddy.evading) {
+        coddy.jumping = true;
+        coddy.vy = -10;
+    }
+}
+
+// -------------------------
+// KAÇINMA
+// -------------------------
+
+function evade() {
+    if (!coddy.jumping) {
+        coddy.evading = true;
+
+        setTimeout(() => {
+            coddy.evading = false;
+        }, 500);
+    }
+}
+
+// -------------------------
+// YENİDEN BAŞLAT
+// -------------------------
+
+function restart() {
+    gameOver = false;
+
+    coddy.x = 50;
+    coddy.y = 240;
+    coddy.vy = 0;
+    coddy.jumping = false;
+    coddy.evading = false;
+
+    fireball.x = 700;
+    fireball.y = 240;
+
+    fireball2.x = 1000;
+    fireball2.y = 150;
+
+    puan = 0;
+}
+
+// -------------------------
+// GÜNCELLEME
+// -------------------------
+
+function update() {
+
+    if (gameOver) return;
+
+    // Sol
+    if (keys["arrowleft"] && coddy.x > 20) {
+        coddy.x -= 5;
+    }
+
+    // Sağ
+    if (keys["arrowright"] && coddy.x < 580 - coddy.width) {
+        coddy.x += 5;
+    }
+
+    // Zıplama fiziği
+    if (coddy.jumping) {
+        coddy.y += coddy.vy;
+        coddy.vy += 0.45;
+
+        if (coddy.y >= 240) {
+            coddy.y = 240;
+            coddy.vy = 0;
+            coddy.jumping = false;
+        }
+    }
+
+    // Kaçınma
+    if (coddy.evading) {
+        coddy.y = 255;
+        coddy.height = 35;
+    } else {
+        coddy.height = 50;
+
+        if (!coddy.jumping) {
+            coddy.y = 240;
+        }
+    }
+
+    // Birinci ateş topu
+    fireball.x -= 5;
+
+    if (fireball.x < -20) {
+        fireball.x = 620;
+        puan++;
+    }
+
+    // İkinci ateş topu
+    fireball2.x -= 5;
+
+    if (fireball2.x < -20) {
+        fireball2.x = 620;
+        puan++;
+    }
+
+    // Çarpışma
+    if (
+        collision(coddy, fireball) ||
+        collision(coddy, fireball2)
+    ) {
+        gameOver = true;
+    }
+}
+
+// -------------------------
+// ÇİZİM
+// -------------------------
+
+function draw() {
+
+    // Şehir arka planı
+    ctx.fillStyle = "#5db4e8";
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+    // Gökyüzü
+    ctx.fillStyle = "#87ceeb";
+    ctx.fillRect(0, 0, 600, 180);
+
+    // Binalar
+    drawBuilding(0, 100, 80, 140);
+    drawBuilding(90, 70, 100, 170);
+    drawBuilding(200, 110, 70, 130);
+    drawBuilding(290, 60, 110, 180);
+    drawBuilding(420, 95, 80, 145);
+    drawBuilding(510, 50, 90, 190);
+
+    // Zemin
+    ctx.fillStyle = "#333";
+    ctx.fillRect(0, 270, 600, 30);
+
+    ctx.fillStyle = "#555";
+    for (let x = 0; x < 600; x += 60) {
+        ctx.fillRect(x, 283, 30, 4);
+    }
+
+    // Ateş topları
+    drawFireball(fireball.x, fireball.y);
+    drawFireball(fireball2.x, fireball2.y);
+
+    // Coddy
+    drawCoddy();
+
+    // Puan
+    ctx.fillStyle = "white";
+    ctx.font = "24px Arial";
+    ctx.fillText("Puan: " + puan, 10, 30);
+
+    // Oyun sonu
+    if (gameOver) {
+        ctx.fillStyle = "rgba(0,0,0,0.75)";
+        ctx.fillRect(0, 0, 600, 300);
+
+        ctx.fillStyle = "red";
+        ctx.font = "bold 50px Arial";
+        ctx.textAlign = "center";
+        ctx.fillText("GAME OVER", 300, 125);
+
+        ctx.fillStyle = "white";
+        ctx.font = "22px Arial";
+        ctx.fillText("Puan: " + puan, 300, 165);
+        ctx.fillText("ENTER = Yeniden Başla", 300, 205);
+
+        ctx.textAlign = "left";
+    }
+}
+
+// -------------------------
+// CODDY ÇİZİMİ
+// -------------------------
+
+function drawCoddy() {
+
+    let h = coddy.height;
+
+    // gövde
+    ctx.fillStyle = "#2196f3";
+    ctx.fillRect(coddy.x + 8, coddy.y + 15, 24, h - 15);
+
+    // kafa
+    ctx.fillStyle = "#ffd1a9";
+    ctx.fillRect(coddy.x + 5, coddy.y, 30, 25);
+
+    // saç
+    ctx.fillStyle = "#5b3518";
+    ctx.fillRect(coddy.x + 5, coddy.y, 30, 7);
+
+    // gözler
+    ctx.fillStyle = "black";
+    ctx.fillRect(coddy.x + 12, coddy.y + 10, 4, 4);
+    ctx.fillRect(coddy.x + 25, coddy.y + 10, 4, 4);
+
+    // ayakkabı
+    ctx.fillStyle = "#222";
+    ctx.fillRect(coddy.x + 5, coddy.y + h - 5, 12, 5);
+    ctx.fillRect(coddy.x + 24, coddy.y + h - 5, 12, 5);
+}
+
+// -------------------------
+// ATEŞ TOPU
+// -------------------------
+
+function drawFireball(x, y) {
+
+    ctx.beginPath();
+    ctx.arc(x + 20, y + 20, 20, 0, Math.PI * 2);
+
+    ctx.fillStyle = "#ff3300";
+    ctx.fill();
+
+    ctx.beginPath();
+    ctx.arc(x + 20, y + 20, 12, 0, Math.PI * 2);
+
+    ctx.fillStyle = "#ffcc00";
+    ctx.fill();
+
+    ctx.beginPath();
+    ctx.arc(x + 20, y + 20, 5, 0, Math.PI * 2);
+
+    ctx.fillStyle = "white";
+    ctx.fill();
+}
+
+// -------------------------
+// BİNA
+// -------------------------
+
+function drawBuilding(x, y, w, h) {
+
+    ctx.fillStyle = "#555";
+    ctx.fillRect(x, y, w, h);
+
+    ctx.fillStyle = "#ffe066";
+
+    for (let yy = y + 15; yy < y + h - 10; yy += 30) {
+        for (let xx = x + 10; xx < x + w - 10; xx += 25) {
+            ctx.fillRect(xx, yy, 10, 15);
+        }
+    }
+}
+
+// -------------------------
+// ANA DÖNGÜ
+// -------------------------
+
+function gameLoop() {
+    update();
+    draw();
+    requestAnimationFrame(gameLoop);
+}
+
+gameLoop();
+
+</script>
+
+<a href="index.html" aria-label="Ana sayfaya dön" title="Ana sayfa" style="position:fixed;right:16px;bottom:16px;z-index:2147483647;display:inline-flex;align-items:center;justify-content:center;min-height:44px;padding:0 16px;background:#d8f26a;color:#202820;border:2px solid #202820;border-radius:7px;font:700 14px Arial,sans-serif;text-decoration:none;box-shadow:3px 3px 0 #202820;">Ana sayfa</a>
+</body>
+</html>

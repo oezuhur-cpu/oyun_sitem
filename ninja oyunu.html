@@ -1,0 +1,921 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1.0">
+<title>Ninja Roguelike</title>
+
+<style>
+*{
+    box-sizing:border-box;
+}
+
+body{
+    margin:0;
+    background:#090b10;
+    color:white;
+    font-family:Arial,sans-serif;
+    overflow:hidden;
+}
+
+canvas{
+    display:block;
+    margin:auto;
+    background:#151922;
+}
+
+#ui{
+    position:fixed;
+    top:15px;
+    left:15px;
+    z-index:5;
+    font-size:18px;
+    text-shadow:2px 2px #000;
+}
+
+#message{
+    position:fixed;
+    left:50%;
+    top:50%;
+    transform:translate(-50%,-50%);
+    text-align:center;
+    font-size:28px;
+    display:none;
+    z-index:10;
+}
+
+button{
+    padding:12px 22px;
+    font-size:18px;
+    border:0;
+    border-radius:8px;
+    cursor:pointer;
+}
+</style>
+</head>
+
+<body>
+
+<div id="ui">
+    ❤️ Can: <span id="hp">100</span>
+    &nbsp; | &nbsp;
+    ⭐ XP: <span id="xp">0</span>
+    &nbsp; | &nbsp;
+    🪙 Altın: <span id="gold">0</span>
+    &nbsp; | &nbsp;
+    🗺️ Oda: <span id="room">1</span>
+</div>
+
+<div id="message">
+    <div id="messageText"></div>
+    <br>
+    <button onclick="restart()">Tekrar Oyna</button>
+</div>
+
+<canvas id="game"></canvas>
+
+<script>
+
+const canvas = document.getElementById("game");
+const ctx = canvas.getContext("2d");
+
+canvas.width = 1000;
+canvas.height = 650;
+
+const keys = {};
+
+document.addEventListener("keydown",e=>{
+    keys[e.key.toLowerCase()] = true;
+});
+
+document.addEventListener("keyup",e=>{
+    keys[e.key.toLowerCase()] = false;
+});
+
+const mouse = {
+    x:500,
+    y:300,
+    down:false
+};
+
+canvas.addEventListener("mousemove",e=>{
+    const r = canvas.getBoundingClientRect();
+
+    mouse.x = (e.clientX-r.left) * canvas.width/r.width;
+    mouse.y = (e.clientY-r.top) * canvas.height/r.height;
+});
+
+canvas.addEventListener("mousedown",()=>{
+    mouse.down=true;
+});
+
+canvas.addEventListener("mouseup",()=>{
+    mouse.down=false;
+});
+
+
+let player;
+let enemies=[];
+let particles=[];
+let coins=[];
+let room=1;
+
+let gameOver=false;
+
+let attackCooldown=0;
+
+const walls = [
+    {x:0,y:0,w:1000,h:25},
+    {x:0,y:625,w:1000,h:25},
+    {x:0,y:0,w:25,h:650},
+    {x:975,y:0,w:25,h:650}
+];
+
+
+function resetGame(){
+
+    player={
+        x:500,
+        y:325,
+
+        radius:18,
+
+        hp:100,
+        maxHp:100,
+
+        speed:3.5,
+
+        damage:25,
+
+        attackRange:65,
+
+        xp:0,
+
+        level:1,
+
+        gold:0
+    };
+
+    enemies=[];
+    particles=[];
+    coins=[];
+
+    room=1;
+    gameOver=false;
+
+    document.getElementById("message").style.display="none";
+
+    spawnRoom();
+}
+
+
+function spawnRoom(){
+
+    enemies=[];
+    coins=[];
+
+    let count = 4 + room*2;
+
+    for(let i=0;i<count;i++){
+
+        let side=Math.floor(Math.random()*4);
+
+        let x,y;
+
+        if(side===0){
+            x=50+Math.random()*900;
+            y=70;
+        }
+
+        if(side===1){
+            x=50+Math.random()*900;
+            y=580;
+        }
+
+        if(side===2){
+            x=70;
+            y=50+Math.random()*550;
+        }
+
+        if(side===3){
+            x=930;
+            y=50+Math.random()*550;
+        }
+
+        let type=Math.random();
+
+        enemies.push({
+            x:x,
+            y:y,
+
+            radius:type<0.25?22:17,
+
+            hp:type<0.25?80:45,
+
+            maxHp:type<0.25?80:45,
+
+            speed:type<0.25?0.7:1.25,
+
+            damage:type<0.25?18:10,
+
+            type:type<0.25?"samurai":"ninja",
+
+            attackTimer:0
+        });
+    }
+}
+
+
+function distance(a,b){
+
+    return Math.hypot(
+        a.x-b.x,
+        a.y-b.y
+    );
+}
+
+
+function attack(){
+
+    if(attackCooldown>0) return;
+
+    attackCooldown=25;
+
+    let angle=Math.atan2(
+        mouse.y-player.y,
+        mouse.x-player.x
+    );
+
+    particles.push({
+        x:player.x+Math.cos(angle)*35,
+        y:player.y+Math.sin(angle)*35,
+
+        life:10,
+
+        type:"slash",
+
+        angle:angle
+    });
+
+    for(let enemy of enemies){
+
+        let d=distance(player,enemy);
+
+        if(d < player.attackRange){
+
+            let a=Math.atan2(
+                enemy.y-player.y,
+                enemy.x-player.x
+            );
+
+            let diff=Math.abs(
+                Math.atan2(
+                    Math.sin(a-angle),
+                    Math.cos(a-angle)
+                )
+            );
+
+            if(diff < Math.PI/2){
+
+                enemy.hp -= player.damage;
+
+                createHitParticles(
+                    enemy.x,
+                    enemy.y
+                );
+            }
+        }
+    }
+}
+
+
+function createHitParticles(x,y){
+
+    for(let i=0;i<8;i++){
+
+        particles.push({
+            x:x,
+            y:y,
+
+            vx:(Math.random()-.5)*5,
+            vy:(Math.random()-.5)*5,
+
+            life:25,
+
+            type:"hit"
+        });
+    }
+}
+
+
+function update(){
+
+    if(gameOver) return;
+
+    if(attackCooldown>0)
+        attackCooldown--;
+
+    // Hareket
+
+    let dx=0;
+    let dy=0;
+
+    if(keys["w"] || keys["arrowup"]) dy--;
+    if(keys["s"] || keys["arrowdown"]) dy++;
+    if(keys["a"] || keys["arrowleft"]) dx--;
+    if(keys["d"] || keys["arrowright"]) dx++;
+
+    if(dx!==0 || dy!==0){
+
+        let len=Math.hypot(dx,dy);
+
+        dx/=len;
+        dy/=len;
+
+        player.x += dx*player.speed;
+        player.y += dy*player.speed;
+    }
+
+    // Duvarlar
+
+    player.x=Math.max(
+        45,
+        Math.min(955,player.x)
+    );
+
+    player.y=Math.max(
+        45,
+        Math.min(605,player.y)
+    );
+
+
+    // Saldırı
+
+    if(mouse.down)
+        attack();
+
+
+    // Düşman AI
+
+    for(let enemy of enemies){
+
+        let dx=player.x-enemy.x;
+        let dy=player.y-enemy.y;
+
+        let d=Math.hypot(dx,dy);
+
+        if(d>35){
+
+            enemy.x += dx/d*enemy.speed;
+            enemy.y += dy/d*enemy.speed;
+
+        }else{
+
+            if(enemy.attackTimer<=0){
+
+                player.hp -= enemy.damage;
+
+                enemy.attackTimer=60;
+
+                createHitParticles(
+                    player.x,
+                    player.y
+                );
+            }
+        }
+
+        if(enemy.attackTimer>0)
+            enemy.attackTimer--;
+    }
+
+
+    // Ölü düşmanlar
+
+    for(let i=enemies.length-1;i>=0;i--){
+
+        if(enemies[i].hp<=0){
+
+            let enemy=enemies[i];
+
+            player.xp += enemy.type==="samurai"?25:15;
+
+            if(Math.random()<0.7){
+
+                coins.push({
+                    x:enemy.x,
+                    y:enemy.y,
+                    radius:7
+                });
+            }
+
+            enemies.splice(i,1);
+        }
+    }
+
+
+    // Coin toplama
+
+    for(let i=coins.length-1;i>=0;i--){
+
+        if(distance(player,coins[i])<30){
+
+            player.gold += 10;
+
+            coins.splice(i,1);
+        }
+    }
+
+
+    // Yeni oda
+
+    if(enemies.length===0){
+
+        room++;
+
+        player.hp=Math.min(
+            player.maxHp,
+            player.hp+20
+        );
+
+        // Her 3 odada güçlendirme
+
+        if(room%3===0){
+
+            chooseUpgrade();
+
+        }else{
+
+            spawnRoom();
+        }
+    }
+
+
+    // Particle güncelleme
+
+    for(let i=particles.length-1;i>=0;i--){
+
+        let p=particles[i];
+
+        p.life--;
+
+        if(p.vx){
+            p.x+=p.vx;
+            p.y+=p.vy;
+        }
+
+        if(p.life<=0)
+            particles.splice(i,1);
+    }
+
+
+    if(player.hp<=0){
+
+        gameOver=true;
+
+        document.getElementById("messageText").innerHTML=
+            "🥷 NİNJA DÜŞTÜ!<br><small>Oda "+room+"</small>";
+
+        document.getElementById("message").style.display="block";
+    }
+
+
+    updateUI();
+}
+
+
+function chooseUpgrade(){
+
+    gameOver=true;
+
+    let choices=[
+        ["⚔️ Keskin Kılıç","+15 hasar","damage"],
+        ["💨 Gölge Adımı","+0.8 hız","speed"],
+        ["❤️ Yaşam Gücü","+30 maksimum can","hp"]
+    ];
+
+    let html="<h2>⚡ GÜÇLENME</h2>";
+
+    choices.forEach((c,i)=>{
+
+        html+=`
+        <button onclick="upgrade('${c[2]}')">
+        ${c[0]}<br>
+        <small>${c[1]}</small>
+        </button>
+        <br><br>
+        `;
+    });
+
+    document.getElementById("messageText").innerHTML=html;
+
+    document.querySelector("#message button").style.display="none";
+
+    document.getElementById("message").style.display="block";
+}
+
+
+function upgrade(type){
+
+    if(type==="damage")
+        player.damage+=15;
+
+    if(type==="speed")
+        player.speed+=0.8;
+
+    if(type==="hp"){
+
+        player.maxHp+=30;
+        player.hp=player.maxHp;
+    }
+
+    gameOver=false;
+
+    document.getElementById("message").style.display="none";
+
+    spawnRoom();
+}
+
+
+function draw(){
+
+    ctx.clearRect(
+        0,
+        0,
+        canvas.width,
+        canvas.height
+    );
+
+
+    // Zemin
+
+    ctx.fillStyle="#20252d";
+
+    ctx.fillRect(
+        0,
+        0,
+        canvas.width,
+        canvas.height
+    );
+
+
+    // Zemin kareleri
+
+    ctx.strokeStyle="#292f39";
+    ctx.lineWidth=1;
+
+    for(let x=25;x<975;x+=50){
+
+        ctx.beginPath();
+        ctx.moveTo(x,25);
+        ctx.lineTo(x,625);
+        ctx.stroke();
+    }
+
+    for(let y=25;y<625;y+=50){
+
+        ctx.beginPath();
+        ctx.moveTo(25,y);
+        ctx.lineTo(975,y);
+        ctx.stroke();
+    }
+
+
+    // Duvarlar
+
+    ctx.fillStyle="#0c0f14";
+
+    for(let wall of walls){
+
+        ctx.fillRect(
+            wall.x,
+            wall.y,
+            wall.w,
+            wall.h
+        );
+    }
+
+
+    // Coinler
+
+    for(let coin of coins){
+
+        ctx.beginPath();
+
+        ctx.arc(
+            coin.x,
+            coin.y,
+            coin.radius,
+            0,
+            Math.PI*2
+        );
+
+        ctx.fillStyle="#e6b84a";
+        ctx.fill();
+
+        ctx.strokeStyle="#fff0a0";
+        ctx.stroke();
+    }
+
+
+    // Düşmanlar
+
+    for(let enemy of enemies){
+
+        ctx.save();
+
+        ctx.translate(
+            enemy.x,
+            enemy.y
+        );
+
+        // gölge
+
+        ctx.beginPath();
+
+        ctx.ellipse(
+            0,
+            12,
+            enemy.radius,
+            8,
+            0,
+            0,
+            Math.PI*2
+        );
+
+        ctx.fillStyle="rgba(0,0,0,.4)";
+        ctx.fill();
+
+
+        // Gövde
+
+        ctx.beginPath();
+
+        ctx.arc(
+            0,
+            0,
+            enemy.radius,
+            0,
+            Math.PI*2
+        );
+
+        ctx.fillStyle=
+            enemy.type==="samurai"
+            ? "#8d3030"
+            : "#333944";
+
+        ctx.fill();
+
+
+        // Maske
+
+        ctx.fillStyle="#111";
+
+        ctx.fillRect(
+            -enemy.radius,
+            -4,
+            enemy.radius*2,
+            8
+        );
+
+
+        // Gözler
+
+        ctx.fillStyle="#ff3333";
+
+        ctx.fillRect(-8,-2,5,3);
+        ctx.fillRect(3,-2,5,3);
+
+        ctx.restore();
+
+
+        // Can barı
+
+        ctx.fillStyle="#111";
+
+        ctx.fillRect(
+            enemy.x-25,
+            enemy.y-enemy.radius-12,
+            50,
+            5
+        );
+
+        ctx.fillStyle="#d33";
+
+        ctx.fillRect(
+            enemy.x-25,
+            enemy.y-enemy.radius-12,
+            50*(enemy.hp/enemy.maxHp),
+            5
+        );
+    }
+
+
+    // Ninja
+
+    drawPlayer();
+
+
+    // Particle
+
+    for(let p of particles){
+
+        if(p.type==="slash"){
+
+            ctx.save();
+
+            ctx.translate(
+                p.x,
+                p.y
+            );
+
+            ctx.rotate(p.angle);
+
+            ctx.strokeStyle="#fff";
+            ctx.lineWidth=5;
+
+            ctx.beginPath();
+
+            ctx.arc(
+                0,
+                0,
+                35,
+                -0.8,
+                0.8
+            );
+
+            ctx.stroke();
+
+            ctx.restore();
+
+        }else{
+
+            ctx.fillStyle="#e55";
+
+            ctx.fillRect(
+                p.x,
+                p.y,
+                4,
+                4
+            );
+        }
+    }
+}
+
+
+function drawPlayer(){
+
+    ctx.save();
+
+    ctx.translate(
+        player.x,
+        player.y
+    );
+
+    let angle=Math.atan2(
+        mouse.y-player.y,
+        mouse.x-player.x
+    );
+
+    ctx.rotate(angle);
+
+
+    // Gölge
+
+    ctx.beginPath();
+
+    ctx.ellipse(
+        0,
+        15,
+        20,
+        9,
+        0,
+        0,
+        Math.PI*2
+    );
+
+    ctx.fillStyle="rgba(0,0,0,.5)";
+    ctx.fill();
+
+
+    // Pelerin
+
+    ctx.beginPath();
+
+    ctx.moveTo(-18,-15);
+    ctx.lineTo(-30,20);
+    ctx.lineTo(0,25);
+    ctx.lineTo(18,-15);
+    ctx.closePath();
+
+    ctx.fillStyle="#111";
+    ctx.fill();
+
+
+    // Kafa
+
+    ctx.beginPath();
+
+    ctx.arc(
+        0,
+        -5,
+        15,
+        0,
+        Math.PI*2
+    );
+
+    ctx.fillStyle="#17191d";
+    ctx.fill();
+
+
+    // Yüz bandı
+
+    ctx.fillStyle="#20242b";
+
+    ctx.fillRect(
+        -15,
+        -9,
+        30,
+        8
+    );
+
+
+    // Göz
+
+    ctx.fillStyle="#e8e8e8";
+
+    ctx.fillRect(
+        5,
+        -7,
+        5,
+        3
+    );
+
+
+    // Kılıç
+
+    ctx.strokeStyle="#ddd";
+    ctx.lineWidth=5;
+
+    ctx.beginPath();
+
+    ctx.moveTo(10,5);
+    ctx.lineTo(55,5);
+
+    ctx.stroke();
+
+
+    ctx.strokeStyle="#8b5a2b";
+    ctx.lineWidth=7;
+
+    ctx.beginPath();
+
+    ctx.moveTo(8,5);
+    ctx.lineTo(20,5);
+
+    ctx.stroke();
+
+    ctx.restore();
+}
+
+
+function updateUI(){
+
+    document.getElementById("hp").textContent=
+        Math.max(0,Math.floor(player.hp));
+
+    document.getElementById("xp").textContent=
+        player.xp;
+
+    document.getElementById("gold").textContent=
+        player.gold;
+
+    document.getElementById("room").textContent=
+        room;
+}
+
+
+function restart(){
+
+    document.querySelector("#message button").style.display="inline-block";
+
+    resetGame();
+}
+
+
+function gameLoop(){
+
+    update();
+    draw();
+
+    requestAnimationFrame(gameLoop);
+}
+
+
+resetGame();
+gameLoop();
+
+</script>
+
+<a href="index.html" aria-label="Ana sayfaya dön" title="Ana sayfa" style="position:fixed;right:16px;bottom:16px;z-index:2147483647;display:inline-flex;align-items:center;justify-content:center;min-height:44px;padding:0 16px;background:#d8f26a;color:#202820;border:2px solid #202820;border-radius:7px;font:700 14px Arial,sans-serif;text-decoration:none;box-shadow:3px 3px 0 #202820;">Ana sayfa</a>
+</body>
+</html>

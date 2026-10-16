@@ -1,0 +1,40 @@
+```html
+<!DOCTYPE html>
+<html lang="tr"><meta charset="UTF-8"><title>Öfke Makinesi</title>
+<style>
+body{margin:0;background:#160b18;color:white;text-align:center;font-family:Arial}
+canvas{background:#26172c;max-width:100%;border:3px solid #ff3155}
+</style>
+<h1>😡 ÖFKE MAKİNESİ</h1><p>Bayrağa ulaş! Kırmızı bloklara dokunma.</p>
+<canvas id="c" width="800" height="420"></canvas>
+<script>
+const c=document.getElementById('c'),x=c.getContext('2d');
+let p={x:40,y:330,vx:0,vy:0},keys={},dead=0,win=false;
+let traps=[180,290,410,535,655];
+onkeydown=e=>{keys[e.key.toLowerCase()]=true;if([' ','ArrowUp','ArrowLeft','ArrowRight'].includes(e.key))e.preventDefault()};
+onkeyup=e=>keys[e.key.toLowerCase()]=false;
+function reset(){p.x=40;p.y=330;p.vx=p.vy=0;dead++;win=false}
+function loop(){
+x.clearRect(0,0,800,420);
+x.fillStyle='#45344e';x.fillRect(0,380,800,40);
+x.fillStyle='#ff3155';
+traps.forEach(a=>{x.beginPath();x.moveTo(a,380);x.lineTo(a+18,345);x.lineTo(a+36,380);x.fill()});
+x.fillStyle='#36ff9b';x.fillRect(750,325,12,55);
+if(!win){
+p.vx=(keys.a||keys.arrowleft?-4:0)+(keys.d||keys.arrowright?4:0);
+if((keys.w||keys[' ']||keys.arrowup)&&p.y>=330)p.vy=-12;
+p.vy+=.55;p.x+=p.vx;p.y+=p.vy;
+if(p.y>330){p.y=330;p.vy=0}
+if(p.x<0)p.x=0;if(p.x>780)p.x=780;
+if(traps.some(a=>p.x+20>a&&p.x<a+36&&p.y+30>345))reset();
+if(p.x>735)win=true;
+}
+x.fillStyle='#ffd447';x.fillRect(p.x,p.y,20,30);
+x.fillStyle='white';x.font='22px Arial';
+x.fillText(win?'BÖLÜMÜ GEÇTİN! 🎉':`Düşüş: ${dead}`,20,30);
+if(win)x.fillText('R ile tekrar oyna',300,210);
+requestAnimationFrame(loop)}
+onkeydown=e=>{keys[e.key.toLowerCase()]=true;if(e.key.toLowerCase()==='r')reset();if(e.key===' ')e.preventDefault()};
+loop();
+</script></html>
+```

@@ -1,0 +1,238 @@
+```html
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+<meta charset="UTF-8">
+<title>6+ Challenge</title>
+<style>
+    * { box-sizing: border-box; }
+
+    body {
+        margin: 0;
+        overflow: hidden;
+        background: #111;
+        color: white;
+        font-family: Arial, sans-serif;
+    }
+
+    #ui {
+        position: fixed;
+        top: 15px;
+        left: 20px;
+        z-index: 10;
+        font-size: 22px;
+        line-height: 1.6;
+    }
+
+    #oyun {
+        width: 100vw;
+        height: 100vh;
+        display: block;
+        background: #151515;
+    }
+
+    #menu {
+        position: fixed;
+        inset: 0;
+        background: rgba(0,0,0,.9);
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        flex-direction: column;
+        z-index: 20;
+        text-align: center;
+    }
+
+    h1 {
+        font-size: 50px;
+        margin: 10px;
+    }
+
+    button {
+        padding: 18px 40px;
+        font-size: 25px;
+        font-weight: bold;
+        cursor: pointer;
+        border: none;
+        border-radius: 15px;
+    }
+</style>
+</head>
+
+<body>
+
+<div id="ui">
+    🎯 Puan: <span id="puan">0</span><br>
+    ❤️ Can: <span id="can">3</span><br>
+    ⏱️ Süre: <span id="sure">10</span>
+</div>
+
+<div id="menu">
+    <h1>🔥 6+ CHALLENGE 🔥</h1>
+    <p>Hedefe tıkla! Hedef kaybolmadan yakala!</p>
+    <p>Her puanda oyun hızlanır.</p>
+    <button onclick="baslat()">BAŞLA</button>
+</div>
+
+<canvas id="oyun"></canvas>
+
+<script>
+const canvas = document.getElementById("oyun");
+const ctx = canvas.getContext("2d");
+
+function boyutlandir() {
+    canvas.width = innerWidth;
+    canvas.height = innerHeight;
+}
+boyutlandir();
+window.addEventListener("resize", boyutlandir);
+
+let hedef;
+let puan = 0;
+let can = 3;
+let sure = 10;
+let aktif = false;
+let sonZaman = 0;
+let hedefSuresi = 900;
+
+function rastgeleHedef() {
+    const r = Math.max(10, 30 - puan * 0.4);
+
+    hedef = {
+        x: r + Math.random() * (canvas.width - r * 2),
+        y: r + Math.random() * (canvas.height - r * 2),
+        r: r,
+        dogdu: performance.now()
+    };
+}
+
+function baslat() {
+    puan = 0;
+    can = 3;
+    sure = 10;
+    hedefSuresi = 900;
+    aktif = true;
+
+    document.getElementById("menu").style.display = "none";
+
+    rastgeleHedef();
+
+    sonZaman = performance.now();
+    requestAnimationFrame(dongu);
+}
+
+canvas.addEventListener("click", function(e) {
+    if (!aktif) return;
+
+    const dx = e.clientX - hedef.x;
+    const dy = e.clientY - hedef.y;
+
+    if (Math.sqrt(dx * dx + dy * dy) <= hedef.r) {
+        puan++;
+
+        // Her puanda hedef daha küçülür ve daha hızlı kaybolur
+        hedefSuresi = Math.max(180, 900 - puan * 35);
+
+        document.getElementById("puan").textContent = puan;
+
+        rastgeleHedef();
+    } else {
+        can--;
+
+        document.getElementById("can").textContent = can;
+
+        if (can <= 0) {
+            bitir();
+        }
+    }
+});
+
+function dongu(zaman) {
+    if (!aktif) return;
+
+    const dt = zaman - sonZaman;
+    sonZaman = zaman;
+
+    sure -= dt / 1000;
+
+    if (sure <= 0) {
+        sure = 0;
+        bitir();
+        return;
+    }
+
+    if (zaman - hedef.dogdu > hedefSuresi) {
+        can--;
+
+        document.getElementById("can").textContent = can;
+
+        if (can <= 0) {
+            bitir();
+            return;
+        }
+
+        rastgeleHedef();
+    }
+
+    ciz();
+
+    document.getElementById("sure").textContent =
+        sure.toFixed(1);
+
+    requestAnimationFrame(dongu);
+}
+
+function ciz() {
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+    // Arka plan
+    ctx.fillStyle = "#151515";
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+    // Hareketli hedef
+    ctx.beginPath();
+    ctx.arc(hedef.x, hedef.y, hedef.r, 0, Math.PI * 2);
+    ctx.fillStyle = "#ff1744";
+    ctx.fill();
+
+    ctx.beginPath();
+    ctx.arc(hedef.x, hedef.y, hedef.r * 0.55, 0, Math.PI * 2);
+    ctx.fillStyle = "#fff";
+    ctx.fill();
+
+    ctx.beginPath();
+    ctx.arc(hedef.x, hedef.y, hedef.r * 0.25, 0, Math.PI * 2);
+    ctx.fillStyle = "#ff1744";
+    ctx.fill();
+
+    // Tehlike çerçevesi
+    ctx.strokeStyle = "#444";
+    ctx.lineWidth = 4;
+    ctx.strokeRect(0, 0, canvas.width, canvas.height);
+}
+
+function bitir() {
+    aktif = false;
+
+    document.getElementById("menu").style.display = "flex";
+
+    document.querySelector("#menu h1").textContent =
+        "💀 OYUN BİTTİ";
+
+    document.querySelector("#menu p").textContent =
+        "Skorun: " + puan;
+
+    document.querySelector("#menu p:nth-of-type(2)").textContent =
+        puan > 6
+        ? "🔥 6'YI GEÇTİN! SEN CİDDİ MİSİN?!"
+        : "😈 6'ya ulaşamadın... tekrar dene!";
+
+    document.querySelector("#menu button").textContent =
+        "TEKRAR OYNA";
+}
+</script>
+
+<a href="index.html" aria-label="Ana sayfaya dön" title="Ana sayfa" style="position:fixed;right:16px;bottom:16px;z-index:2147483647;display:inline-flex;align-items:center;justify-content:center;min-height:44px;padding:0 16px;background:#d8f26a;color:#202820;border:2px solid #202820;border-radius:7px;font:700 14px Arial,sans-serif;text-decoration:none;box-shadow:3px 3px 0 #202820;">Ana sayfa</a>
+</body>
+</html>
+```

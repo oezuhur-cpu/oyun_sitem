@@ -1,0 +1,995 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1.0">
+<title>CEPHE KOMUTASI</title>
+
+<style>
+*{box-sizing:border-box}
+body{
+    margin:0;
+    background:#11161b;
+    color:#e9eef2;
+    font-family:Arial,sans-serif;
+    overflow:auto;
+}
+#app{
+    width:min(1500px,100%);
+    margin:auto;
+    padding:10px;
+}
+header{
+    background:#1b2229;
+    border:1px solid #38434c;
+    padding:10px;
+    display:flex;
+    justify-content:space-between;
+    align-items:center;
+    gap:10px;
+    flex-wrap:wrap;
+}
+h1{margin:0;font-size:22px}
+.stats{
+    display:flex;
+    gap:8px;
+    flex-wrap:wrap;
+}
+.stat{
+    background:#11161b;
+    padding:8px 12px;
+    border:1px solid #35414a;
+    border-radius:5px;
+}
+#layout{
+    display:grid;
+    grid-template-columns:minmax(0,1fr) 350px;
+    gap:10px;
+    margin-top:10px;
+}
+#mapBox{
+    position:relative;
+    background:#26352a;
+    border:2px solid #48544b;
+    overflow:hidden;
+    aspect-ratio:16/10;
+    min-height:500px;
+}
+canvas{
+    display:block;
+    width:100%;
+    height:100%;
+}
+#side{
+    background:#1b2229;
+    border:1px solid #38434c;
+    padding:10px;
+    display:flex;
+    flex-direction:column;
+    gap:10px;
+}
+.section{
+    background:#12181d;
+    border:1px solid #303b43;
+    padding:10px;
+}
+.section h3{
+    margin:0 0 8px;
+    font-size:14px;
+    color:#aebbc4;
+}
+button{
+    border:1px solid #46545e;
+    background:#26313a;
+    color:white;
+    padding:9px;
+    cursor:pointer;
+    border-radius:4px;
+    font-weight:bold;
+}
+button:hover{background:#35444f}
+button:active{transform:scale(.98)}
+.commands{
+    display:grid;
+    grid-template-columns:1fr 1fr;
+    gap:6px;
+}
+button.primary{background:#315f42}
+button.danger{background:#713838}
+button.blue{background:#304f6c}
+button.gold{background:#6a5428}
+
+.unit{
+    padding:8px;
+    margin:5px 0;
+    background:#202930;
+    border:1px solid #3a464e;
+    cursor:pointer;
+}
+.unit.selected{
+    border-color:#f0d35b;
+    box-shadow:0 0 0 1px #f0d35b inset;
+}
+.bar{
+    height:5px;
+    background:#101417;
+    margin-top:5px;
+}
+.fill{
+    height:100%;
+    background:#70bf78;
+}
+#log{
+    height:170px;
+    overflow:auto;
+    font-size:12px;
+    line-height:1.45;
+}
+.logline{
+    border-bottom:1px solid #293239;
+    padding:4px 0;
+}
+.big{
+    font-size:18px;
+    font-weight:bold;
+}
+#operation{
+    font-size:13px;
+    min-height:42px;
+    color:#d6dde2;
+}
+@media(max-width:900px){
+    #layout{grid-template-columns:1fr}
+    #mapBox{min-height:0}
+}
+</style>
+</head>
+
+<body>
+<div id="app">
+
+<header>
+    <h1>⚔️ CEPHEHE KOMUTASI</h1>
+
+    <div class="stats">
+        <div class="stat">💰 Bütçe: <b id="money">1200</b></div>
+        <div class="stat">🧠 Moral: <b id="morale">82</b></div>
+        <div class="stat">📡 İstihbarat: <b id="intel">55</b></div>
+        <div class="stat">⏱️ Tur: <b id="turn">1</b></div>
+    </div>
+</header>
+
+<div id="layout">
+
+<div id="mapBox">
+<canvas id="game" width="1200" height="750"></canvas>
+</div>
+
+<aside id="side">
+
+<div class="section">
+<h3>👨‍✈️ KOMUTA MERKEZİ</h3>
+<div id="commander" class="big">Komutan: ATLAS</div>
+<p id="commanderInfo">Dengeli komuta. Birlik hareketleri daha kararlı.</p>
+
+<div class="commands">
+<button onclick="setCommander('Atlas')">ATLAS</button>
+<button onclick="setCommander('Mira')">MIRA</button>
+<button onclick="setCommander('Vega')">VEGA</button>
+</div>
+</div>
+
+<div class="section">
+<h3>🪖 BİRLİKLER</h3>
+<div id="units"></div>
+</div>
+
+<div class="section">
+<h3>🎯 OPERASYON</h3>
+
+<div id="operation">
+Haritada bir birlik seç.
+</div>
+
+<div class="commands">
+<button class="primary" onclick="command('advance')">➡ İLERLE</button>
+<button class="blue" onclick="command('move')">🚩 HAREKET</button>
+<button onclick="command('defend')">🛡 SAVUN</button>
+<button onclick="command('recon')">📡 KEŞİF</button>
+<button class="gold" onclick="command('operation')">⚔ OPERASYON</button>
+<button class="danger" onclick="command('retreat')">↩ GERİ ÇEKİL</button>
+</div>
+</div>
+
+<div class="section">
+<h3>📜 KOMUTA GÜNLÜĞÜ</h3>
+<div id="log"></div>
+</div>
+
+<button class="primary" onclick="nextTurn()">⏩ TURU İLERLET</button>
+
+</aside>
+</div>
+</div>
+
+<script>
+const canvas=document.getElementById("game");
+const ctx=canvas.getContext("2d");
+
+const W=1200,H=750;
+
+let turn=1;
+let money=1200;
+let morale=82;
+let intel=55;
+let selected=null;
+let target=null;
+let commander="Atlas";
+
+let particles=[];
+let explosions=[];
+let messages=[];
+
+const zones=[
+ {name:"Kuzey Ovası",x:80,y:70,w:330,h:220,owner:"us"},
+ {name:"Merkez",x:410,y:220,w:350,h:250,owner:"neutral"},
+ {name:"Doğu Tepeleri",x:760,y:60,w:350,h:240,owner:"enemy"},
+ {name:"Batı Vadisi",x:60,y:430,w:330,h:240,owner:"us"},
+ {name:"Güney Düzlüğü",x:420,y:500,w:340,h:190,owner:"neutral"},
+ {name:"Doğu Bölgesi",x:800,y:390,w:340,h:270,owner:"enemy"}
+];
+
+const units=[
+ {id:1,name:"Şimşek",type:"MOBİL",x:220,y:170,power:86,morale:88,speed:1.8,enemy:false},
+ {id:2,name:"Kale",type:"SAVUNMA",x:260,y:540,power:94,morale:91,speed:0.9,enemy:false},
+ {id:3,name:"Kartal",type:"KEŞİF",x:510,y:330,power:62,morale:85,speed:2.4,enemy:false},
+ {id:4,name:"Doruk",type:"DESTEK",x:590,y:570,power:72,morale:78,speed:1.3,enemy:false},
+
+ {id:101,name:"Kuzgun",type:"MOBİL",x:930,y:160,power:84,morale:82,speed:1.5,enemy:true},
+ {id:102,name:"Siper",type:"SAVUNMA",x:1010,y:520,power:92,morale:87,speed:.8,enemy:true},
+ {id:103,name:"Gözcü",type:"KEŞİF",x:790,y:330,power:61,morale:80,speed:2.1,enemy:true}
+];
+
+function log(text){
+    messages.unshift(text);
+    messages=messages.slice(0,30);
+    document.getElementById("log").innerHTML=
+        messages.map(x=>`<div class="logline">${x}</div>`).join("");
+}
+
+function setCommander(c){
+    commander=c;
+
+    let info={
+        Atlas:"Dengeli komuta. Hareket ve savunma dengeli.",
+        Mira:"Hızlı karar. Hareket emirlerinde bonus.",
+        Vega:"Savunma uzmanı. Savunma emirlerinde bonus."
+    };
+
+    document.getElementById("commander").textContent="Komutan: "+c.toUpperCase();
+    document.getElementById("commanderInfo").textContent=info[c];
+
+    log("👨‍✈️ Komuta değişti: "+c);
+}
+
+function selectedUnit(){
+    return units.find(u=>u.id===selected);
+}
+
+function updateUnits(){
+    let box=document.getElementById("units");
+
+    box.innerHTML=units.filter(u=>!u.enemy).map(u=>`
+        <div class="unit ${selected===u.id?"selected":""}"
+             onclick="selectUnit(${u.id})">
+            <b>${u.name}</b> — ${u.type}<br>
+            Güç: ${Math.round(u.power)} | Moral: ${Math.round(u.morale)}
+            <div class="bar">
+                <div class="fill" style="width:${u.power}%"></div>
+            </div>
+        </div>
+    `).join("");
+}
+
+function selectUnit(id){
+    selected=id;
+    target=null;
+
+    let u=selectedUnit();
+
+    document.getElementById("operation").innerHTML=
+        `Seçili birlik: <b>${u.name}</b><br>Haritada bir hedef noktası seç.`;
+
+    updateUnits();
+    log("🎯 "+u.name+" seçildi.");
+}
+
+function dist(a,b){
+    return Math.hypot(a.x-b.x,a.y-b.y);
+}
+
+function moveToward(u,x,y,amount){
+    let dx=x-u.x;
+    let dy=y-u.y;
+    let d=Math.hypot(dx,dy);
+
+    if(d<1)return;
+
+    u.x+=(dx/d)*amount;
+    u.y+=(dy/d)*amount;
+
+    u.x=Math.max(25,Math.min(W-25,u.x));
+    u.y=Math.max(25,Math.min(H-25,u.y));
+}
+
+function nearestEnemy(u){
+    let enemies=units.filter(x=>x.enemy);
+    let best=null;
+    let bd=Infinity;
+
+    for(const e of enemies){
+        let d=dist(u,e);
+        if(d<bd){
+            bd=d;
+            best=e;
+        }
+    }
+
+    return best;
+}
+
+function commanderBonus(type){
+    if(commander==="Mira" && type==="MOBİL") return 1.15;
+    if(commander==="Vega" && type==="SAVUNMA") return 1.2;
+    return 1.05;
+}
+
+function command(type){
+
+    let u=selectedUnit();
+
+    if(!u){
+        log("⚠️ Önce bir birlik seç.");
+        return;
+    }
+
+    if(type==="move"){
+
+        if(!target){
+            log("📍 Haritada hedef noktası seç.");
+            return;
+        }
+
+        u.x=target.x;
+        u.y=target.y;
+
+        u.morale=Math.min(100,u.morale+2);
+
+        log("🚩 "+u.name+" yeni konuma hareket etti.");
+    }
+
+    if(type==="advance"){
+
+        let e=nearestEnemy(u);
+
+        if(!e){
+            log("📡 Yakında rakip birlik bulunamadı.");
+            return;
+        }
+
+        let d=dist(u,e);
+
+        if(d>260){
+            moveToward(u,e.x,e.y,100);
+            log("➡ "+u.name+" temas bölgesine ilerliyor.");
+        }else{
+            resolveConflict(u,e);
+        }
+    }
+
+    if(type==="defend"){
+
+        u.morale=Math.min(100,u.morale+10);
+        u.power=Math.min(100,u.power+3);
+
+        log("🛡 "+u.name+" savunma düzenine geçti.");
+    }
+
+    if(type==="recon"){
+
+        if(money<80){
+            log("💰 Keşif için bütçe yetersiz.");
+            return;
+        }
+
+        money-=80;
+        intel=Math.min(100,intel+15);
+
+        let e=nearestEnemy(u);
+
+        if(e){
+            log("📡 Keşif tamamlandı: "+e.name+
+                " yaklaşık güç "+Math.round(e.power)+".");
+        }
+    }
+
+    if(type==="operation"){
+
+        if(money<180){
+            log("💰 Büyük operasyon için bütçe yetersiz.");
+            return;
+        }
+
+        money-=180;
+
+        let e=nearestEnemy(u);
+
+        if(!e){
+            log("⚠️ Operasyon hedefi bulunamadı.");
+            return;
+        }
+
+        let d=dist(u,e);
+
+        if(d>300){
+            log("📍 Hedef çok uzakta. Önce bölgeye yaklaş.");
+            return;
+        }
+
+        let chance=
+            (u.power*.6+
+             u.morale*.25+
+             intel*.15) *
+             commanderBonus(u.type);
+
+        let enemyScore=e.power*.6+e.morale*.4;
+
+        if(chance>=enemyScore || Math.random()<.35){
+
+            e.power-=20+Math.random()*15;
+            e.morale-=15;
+
+            u.morale=Math.min(100,u.morale+6);
+
+            createExplosion(e.x,e.y);
+
+            log("⚔️ OPERASYON BAŞARILI: "+u.name+
+                " rakip "+e.name+" üzerinde üstünlük sağladı.");
+
+            if(e.power<=15){
+                log("🏳️ "+e.name+" operasyon alanından çekildi.");
+                e.x=1080+Math.random()*80;
+                e.y=100+Math.random()*550;
+            }
+
+        }else{
+
+            u.power-=12;
+            u.morale-=8;
+
+            createExplosion(u.x,u.y);
+
+            log("⚠️ OPERASYON BEKLENENDEN ZOR GEÇTİ.");
+        }
+    }
+
+    if(type==="retreat"){
+
+        u.x-=70;
+        u.y+=Math.random()*80-40;
+
+        u.x=Math.max(30,u.x);
+        u.y=Math.max(30,Math.min(H-30,u.y));
+
+        u.morale=Math.max(0,u.morale-2);
+
+        log("↩ "+u.name+" geri çekildi.");
+    }
+
+    money=Math.max(0,money);
+
+    updateUI();
+    updateUnits();
+}
+
+function resolveConflict(a,b){
+
+    let bonus=commanderBonus(a.type);
+
+    let own=a.power*.65+a.morale*.35;
+    let enemy=b.power*.65+b.morale*.35;
+
+    own*=bonus;
+
+    let roll=Math.random()*25;
+
+    if(own+roll>enemy){
+
+        b.power-=18+Math.random()*15;
+        b.morale-=12;
+
+        a.morale=Math.min(100,a.morale+4);
+
+        moveToward(a,b.x,b.y,-25);
+
+        createExplosion(b.x,b.y);
+
+        log("⚔️ "+a.name+" ile "+b.name+
+            " arasında çatışma: avantaj sende.");
+
+    }else{
+
+        a.power-=14+Math.random()*12;
+        a.morale-=10;
+
+        createExplosion(a.x,a.y);
+
+        log("⚠️ "+a.name+" çatışmada geri itildi.");
+    }
+
+    if(b.power<=10){
+        b.x=1080+Math.random()*60;
+        b.y=100+Math.random()*550;
+        b.power=45;
+        log("🔴 "+b.name+" bölgeden çekildi.");
+    }
+
+    a.power=Math.max(5,a.power);
+    a.morale=Math.max(5,a.morale);
+}
+
+function nextTurn(){
+
+    turn++;
+
+    money+=150;
+    intel=Math.max(0,Math.min(100,intel+Math.random()*8-2));
+
+    morale+=Math.random()*5-2;
+    morale=Math.max(0,Math.min(100,morale));
+
+    /* Düşman AI */
+
+    const enemies=units.filter(u=>u.enemy);
+    const friendlies=units.filter(u=>!u.enemy);
+
+    enemies.forEach(e=>{
+
+        let targetUnit=friendlies
+            .slice()
+            .sort((a,b)=>dist(e,a)-dist(e,b))[0];
+
+        if(!targetUnit)return;
+
+        let d=dist(e,targetUnit);
+
+        if(d<150){
+
+            if(Math.random()<.65){
+                e.power-=5;
+                targetUnit.power-=3;
+
+                createExplosion(e.x,e.y);
+
+                log("🔴 Düşman baskısı: "+e.name+
+                    " temas bölgesinde hareket ediyor.");
+            }
+
+        }else{
+
+            moveToward(
+                e,
+                targetUnit.x,
+                targetUnit.y,
+                e.speed*3
+            );
+
+            if(Math.random()<.25)
+                log("🔴 "+e.name+" ilerliyor.");
+        }
+
+        e.morale+=Math.random()*6-3;
+        e.morale=Math.max(10,Math.min(100,e.morale));
+    });
+
+    /* Oyuncu birlikleri hafif canlılık */
+
+    friendlies.forEach(u=>{
+
+        if(Math.random()<.18){
+            u.morale=Math.min(100,u.morale+3);
+        }
+
+        /* Eğer hedef seçilmişse birlik hedefe doğru yavaşça ilerler */
+        if(selected===u.id && target){
+            moveToward(u,target.x,target.y,u.speed);
+        }
+    });
+
+    log("⏱️ TUR "+turn+" başladı. Düşman birlikleri hareket ediyor.");
+
+    updateUI();
+    updateUnits();
+}
+
+function updateUI(){
+    document.getElementById("money").textContent=Math.round(money);
+    document.getElementById("morale").textContent=Math.round(morale);
+    document.getElementById("intel").textContent=Math.round(intel);
+    document.getElementById("turn").textContent=turn;
+}
+
+function createExplosion(x,y){
+
+    explosions.push({
+        x,y,
+        r:4,
+        life:1
+    });
+
+    for(let i=0;i<15;i++){
+
+        particles.push({
+            x,y,
+            vx:(Math.random()-.5)*4,
+            vy:(Math.random()-.5)*4,
+            life:1
+        });
+    }
+}
+
+/* HARİTA */
+
+function drawBackground(){
+
+    ctx.fillStyle="#50654c";
+    ctx.fillRect(0,0,W,H);
+
+    /* grid */
+
+    ctx.strokeStyle="rgba(255,255,255,.045)";
+    ctx.lineWidth=1;
+
+    for(let x=0;x<W;x+=30){
+        ctx.beginPath();
+        ctx.moveTo(x,0);
+        ctx.lineTo(x,H);
+        ctx.stroke();
+    }
+
+    for(let y=0;y<H;y+=30){
+        ctx.beginPath();
+        ctx.moveTo(0,y);
+        ctx.lineTo(W,y);
+        ctx.stroke();
+    }
+
+    /* nehir */
+
+    ctx.strokeStyle="#4e91ad";
+    ctx.lineWidth=28;
+    ctx.beginPath();
+    ctx.moveTo(570,-20);
+    ctx.bezierCurveTo(
+        490,130,
+        720,250,
+        590,390
+    );
+    ctx.bezierCurveTo(
+        480,520,
+        720,600,
+        650,780
+    );
+    ctx.stroke();
+
+    ctx.strokeStyle="#79b5c9";
+    ctx.lineWidth=4;
+    ctx.beginPath();
+    ctx.moveTo(570,-20);
+    ctx.bezierCurveTo(
+        490,130,
+        720,250,
+        590,390
+    );
+    ctx.bezierCurveTo(
+        480,520,
+        720,600,
+        650,780
+    );
+    ctx.stroke();
+
+    /* yollar */
+
+    ctx.strokeStyle="#927c5b";
+    ctx.lineWidth=8;
+
+    ctx.beginPath();
+    ctx.moveTo(0,380);
+    ctx.lineTo(1200,380);
+    ctx.stroke();
+
+    ctx.beginPath();
+    ctx.moveTo(400,0);
+    ctx.lineTo(470,750);
+    ctx.stroke();
+
+    /* dağlar */
+
+    for(let i=0;i<16;i++){
+
+        let x=700+(i%4)*95;
+        let y=30+Math.floor(i/4)*90;
+
+        ctx.fillStyle="#4b5349";
+
+        ctx.beginPath();
+        ctx.moveTo(x,y+45);
+        ctx.lineTo(x+35,y);
+        ctx.lineTo(x+70,y+45);
+        ctx.closePath();
+        ctx.fill();
+    }
+}
+
+function drawZones(){
+
+    zones.forEach(z=>{
+
+        let color=
+            z.owner==="us"?
+            "rgba(55,150,75,.10)":
+            z.owner==="enemy"?
+            "rgba(170,55,55,.10)":
+            "rgba(220,190,70,.06)";
+
+        ctx.fillStyle=color;
+        ctx.fillRect(z.x,z.y,z.w,z.h);
+
+        ctx.strokeStyle="rgba(255,255,255,.12)";
+        ctx.strokeRect(z.x,z.y,z.w,z.h);
+
+        ctx.fillStyle="rgba(255,255,255,.55)";
+        ctx.font="14px Arial";
+        ctx.fillText(z.name,z.x+10,z.y+22);
+    });
+}
+
+function drawFront(){
+
+    ctx.strokeStyle="#e1c94e";
+    ctx.lineWidth=3;
+    ctx.setLineDash([12,10]);
+
+    ctx.beginPath();
+    ctx.moveTo(730,0);
+    ctx.lineTo(720,180);
+    ctx.lineTo(690,350);
+    ctx.lineTo(740,520);
+    ctx.lineTo(760,H);
+    ctx.stroke();
+
+    ctx.setLineDash([]);
+
+    ctx.fillStyle="#e1c94e";
+    ctx.font="bold 13px Arial";
+    ctx.fillText("AKTİF CEPHE",700,30);
+}
+
+function drawTarget(){
+
+    if(!target)return;
+
+    ctx.strokeStyle="#f3d04d";
+    ctx.lineWidth=2;
+
+    ctx.beginPath();
+    ctx.arc(target.x,target.y,15,0,Math.PI*2);
+    ctx.stroke();
+
+    ctx.beginPath();
+    ctx.moveTo(target.x-22,target.y);
+    ctx.lineTo(target.x+22,target.y);
+    ctx.moveTo(target.x,target.y-22);
+    ctx.lineTo(target.x,target.y+22);
+    ctx.stroke();
+}
+
+function drawUnit(u){
+
+    let selectedUnitFlag=selected===u.id;
+
+    /* hedefe giden çizgi */
+
+    if(selectedUnitFlag && target){
+
+        ctx.strokeStyle="rgba(255,220,70,.5)";
+        ctx.setLineDash([7,7]);
+
+        ctx.beginPath();
+        ctx.moveTo(u.x,u.y);
+        ctx.lineTo(target.x,target.y);
+        ctx.stroke();
+
+        ctx.setLineDash([]);
+    }
+
+    if(selectedUnitFlag){
+
+        ctx.strokeStyle="#ffe05a";
+        ctx.lineWidth=3;
+
+        ctx.beginPath();
+        ctx.arc(u.x,u.y,24,0,Math.PI*2);
+        ctx.stroke();
+    }
+
+    /* birlik gövdesi */
+
+    ctx.save();
+    ctx.translate(u.x,u.y);
+
+    ctx.fillStyle=u.enemy?"#b73e3e":"#4fa968";
+    ctx.fillRect(-16,-11,32,22);
+
+    ctx.fillStyle=u.enemy?"#782828":"#2f7045";
+    ctx.fillRect(-7,-17,14,8);
+
+    ctx.fillStyle="#d9d9d9";
+    ctx.fillRect(13,-3,14,5);
+
+    ctx.restore();
+
+    /* moral */
+
+    ctx.fillStyle="#111";
+    ctx.fillRect(u.x-20,u.y+17,40,5);
+
+    ctx.fillStyle=u.enemy?"#d45b5b":"#73d17e";
+    ctx.fillRect(
+        u.x-20,
+        u.y+17,
+        40*Math.max(0,u.morale)/100,
+        5
+    );
+
+    ctx.fillStyle="#fff";
+    ctx.font="11px Arial";
+    ctx.textAlign="center";
+    ctx.fillText(u.name,u.x,u.y-25);
+    ctx.textAlign="left";
+}
+
+function drawParticles(){
+
+    particles.forEach(p=>{
+        p.x+=p.vx;
+        p.y+=p.vy;
+        p.life-=.025;
+
+        ctx.fillStyle="rgba(255,205,80,"+Math.max(0,p.life)+")";
+        ctx.fillRect(p.x,p.y,3,3);
+    });
+
+    particles=particles.filter(p=>p.life>0);
+
+    explosions.forEach(e=>{
+        e.r+=1.5;
+        e.life-=.035;
+
+        ctx.strokeStyle="rgba(255,190,70,"+Math.max(0,e.life)+")";
+        ctx.lineWidth=3;
+
+        ctx.beginPath();
+        ctx.arc(e.x,e.y,e.r,0,Math.PI*2);
+        ctx.stroke();
+    });
+
+    explosions=explosions.filter(e=>e.life>0);
+}
+
+function draw(){
+
+    drawBackground();
+    drawZones();
+    drawFront();
+
+    units.forEach(drawUnit);
+
+    drawTarget();
+    drawParticles();
+
+    /* üst bilgi */
+
+    ctx.fillStyle="rgba(0,0,0,.45)";
+    ctx.fillRect(15,15,330,55);
+
+    ctx.fillStyle="#fff";
+    ctx.font="bold 18px Arial";
+    ctx.fillText("OPERASYON HARİTASI",30,40);
+
+    ctx.font="12px Arial";
+    ctx.fillText(
+        "Yeşil: Sen   Kırmızı: Rakip   Sarı: Hedef",
+        30,60
+    );
+}
+
+function animate(){
+    draw();
+    requestAnimationFrame(animate);
+}
+
+/* HARİTAYA TIKLAMA */
+
+canvas.addEventListener("click",function(ev){
+
+    let rect=canvas.getBoundingClientRect();
+
+    let x=(ev.clientX-rect.left)/rect.width*W;
+    let y=(ev.clientY-rect.top)/rect.height*H;
+
+    /* Birliğe tıklama */
+
+    let clicked=units
+        .filter(u=>!u.enemy)
+        .find(u=>Math.hypot(u.x-x,u.y-y)<28);
+
+    if(clicked){
+        selectUnit(clicked.id);
+        return;
+    }
+
+    /* hedef */
+
+    if(selected){
+
+        target={
+            x:Math.max(20,Math.min(W-20,x)),
+            y:Math.max(20,Math.min(H-20,y))
+        };
+
+        let u=selectedUnit();
+
+        document.getElementById("operation").innerHTML=
+            `<b>${u.name}</b> hedef belirledi.<br>
+             X: ${Math.round(target.x)} / Y: ${Math.round(target.y)}`;
+
+        log("📍 "+u.name+" için yeni hedef belirlendi.");
+    }
+});
+
+updateUnits();
+updateUI();
+
+log("🟢 Komuta merkezi hazır.");
+log("📍 Birlik seç ve haritada hedef belirle.");
+log("🔴 Rakip birlikler kendi başlarına hareket edecek.");
+
+animate();
+
+/* Otomatik canlı dünya */
+
+setInterval(()=>{
+
+    /* savaş alanındaki düşmanlar bazen yön değiştirir */
+
+    units.filter(u=>u.enemy).forEach(e=>{
+
+        if(Math.random()<.25){
+
+            let f=units
+                .filter(u=>!u.enemy)
+                .sort((a,b)=>dist(e,a)-dist(e,b))[0];
+
+            if(f){
+                moveToward(e,f.x,f.y,e.speed*1.5);
+            }
+        }
+    });
+
+},700);
+</script>
+
+<a href="index.html" aria-label="Ana sayfaya dön" title="Ana sayfa" style="position:fixed;right:16px;bottom:16px;z-index:2147483647;display:inline-flex;align-items:center;justify-content:center;min-height:44px;padding:0 16px;background:#d8f26a;color:#202820;border:2px solid #202820;border-radius:7px;font:700 14px Arial,sans-serif;text-decoration:none;box-shadow:3px 3px 0 #202820;">Ana sayfa</a>
+</body>
+</html>

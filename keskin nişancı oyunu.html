@@ -1,0 +1,179 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+<meta charset="UTF-8">
+<title>Keskin Nişancı</title>
+
+<style>
+    body {
+        margin: 0;
+        background: #111;
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        height: 100vh;
+        font-family: Arial;
+    }
+
+    canvas {
+        border: 4px solid white;
+        cursor: crosshair;
+        background: #68745c;
+    }
+</style>
+</head>
+
+<body>
+
+<canvas id="oyun" width="900" height="550"></canvas>
+
+<script>
+const canvas = document.getElementById("oyun");
+const ctx = canvas.getContext("2d");
+
+let skor = 0;
+let mermi = 10;
+let hedefler = [];
+
+function hedefOlustur() {
+    hedefler.push({
+        x: 80 + Math.random() * 740,
+        y: 80 + Math.random() * 400,
+        r: 25
+    });
+}
+
+// Başlangıç hedefleri
+for (let i = 0; i < 5; i++) {
+    hedefOlustur();
+}
+
+canvas.addEventListener("click", function(e) {
+
+    if (mermi <= 0) return;
+
+    mermi--;
+
+    const rect = canvas.getBoundingClientRect();
+
+    const fareX = e.clientX - rect.left;
+    const fareY = e.clientY - rect.top;
+
+    for (let i = hedefler.length - 1; i >= 0; i--) {
+
+        const hedef = hedefler[i];
+
+        const dx = fareX - hedef.x;
+        const dy = fareY - hedef.y;
+
+        const mesafe = Math.sqrt(dx * dx + dy * dy);
+
+        if (mesafe < hedef.r) {
+
+            skor += 10;
+
+            hedefler.splice(i, 1);
+
+            hedefOlustur();
+
+            break;
+        }
+    }
+
+    // Mermiler bittiyse yeniden doldur
+    if (mermi === 0) {
+        setTimeout(() => {
+            mermi = 10;
+        }, 1000);
+    }
+});
+
+function ciz() {
+
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+    // Arka plan
+    ctx.fillStyle = "#68745c";
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+    // Uzak tepeler
+    ctx.fillStyle = "#4d5945";
+    ctx.beginPath();
+    ctx.moveTo(0, 350);
+    ctx.lineTo(180, 180);
+    ctx.lineTo(350, 350);
+    ctx.lineTo(530, 160);
+    ctx.lineTo(750, 350);
+    ctx.lineTo(900, 200);
+    ctx.lineTo(900, 550);
+    ctx.lineTo(0, 550);
+    ctx.fill();
+
+    // Hedefler
+    for (const hedef of hedefler) {
+
+        // Dış halka
+        ctx.fillStyle = "white";
+        ctx.beginPath();
+        ctx.arc(hedef.x, hedef.y, hedef.r, 0, Math.PI * 2);
+        ctx.fill();
+
+        // Kırmızı halka
+        ctx.fillStyle = "red";
+        ctx.beginPath();
+        ctx.arc(hedef.x, hedef.y, 18, 0, Math.PI * 2);
+        ctx.fill();
+
+        // Merkez
+        ctx.fillStyle = "black";
+        ctx.beginPath();
+        ctx.arc(hedef.x, hedef.y, 7, 0, Math.PI * 2);
+        ctx.fill();
+    }
+
+    // Bilgi
+    ctx.fillStyle = "white";
+    ctx.font = "24px Arial";
+    ctx.fillText("SKOR: " + skor, 20, 35);
+    ctx.fillText("MERMİ: " + mermi, 750, 35);
+
+    // Nişangah
+    canvas.onmousemove = function(e) {
+
+        const rect = canvas.getBoundingClientRect();
+        const x = e.clientX - rect.left;
+        const y = e.clientY - rect.top;
+
+        cizNisangah(x, y);
+    };
+}
+
+function cizNisangah(x, y) {
+
+    // Nişangah
+    ctx.strokeStyle = "lime";
+    ctx.lineWidth = 2;
+
+    ctx.beginPath();
+    ctx.moveTo(x - 20, y);
+    ctx.lineTo(x + 20, y);
+    ctx.moveTo(x, y - 20);
+    ctx.lineTo(x, y + 20);
+    ctx.stroke();
+
+    ctx.beginPath();
+    ctx.arc(x, y, 10, 0, Math.PI * 2);
+    ctx.stroke();
+}
+
+function oyunDongusu() {
+    ciz();
+    requestAnimationFrame(oyunDongusu);
+}
+
+oyunDongusu();
+</script>
+
+<a href="index.html" aria-label="Ana sayfaya dön" title="Ana sayfa" style="position:fixed;right:16px;bottom:16px;z-index:2147483647;display:inline-flex;align-items:center;justify-content:center;min-height:44px;padding:0 16px;background:#d8f26a;color:#202820;border:2px solid #202820;border-radius:7px;font:700 14px Arial,sans-serif;text-decoration:none;box-shadow:3px 3px 0 #202820;">Ana sayfa</a>
+</body>
+</html>

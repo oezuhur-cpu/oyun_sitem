@@ -1,0 +1,726 @@
+```html
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>NEON LEGEND</title>
+<style>
+*{box-sizing:border-box}
+body{
+  margin:0;
+  overflow:hidden;
+  background:#050712;
+  font-family:Arial,sans-serif;
+  color:white;
+}
+canvas{display:block}
+#ui{
+  position:fixed;
+  left:18px;
+  top:15px;
+  z-index:5;
+  user-select:none;
+  text-shadow:0 2px 5px #000;
+}
+#title{
+  font-size:25px;
+  font-weight:bold;
+  letter-spacing:3px;
+}
+#stats{margin-top:7px;font-size:15px}
+.bar{
+  width:230px;
+  height:16px;
+  border:2px solid white;
+  margin-top:7px;
+  background:#111;
+  border-radius:10px;
+  overflow:hidden;
+}
+#hp{height:100%;background:#ff315b;width:100%}
+#xp{height:100%;background:#3de8ff;width:0%}
+#bossbar{
+  position:fixed;
+  display:none;
+  top:20px;
+  left:50%;
+  transform:translateX(-50%);
+  width:420px;
+  text-align:center;
+  z-index:6;
+}
+#bossname{font-weight:bold;font-size:20px;margin-bottom:5px}
+#bossfill{
+  height:20px;
+  border:2px solid white;
+  background:#220014;
+}
+#bossinner{height:100%;background:#ff00c8;width:100%}
+#message{
+  position:fixed;
+  left:50%;
+  bottom:30px;
+  transform:translateX(-50%);
+  z-index:7;
+  font-size:20px;
+  font-weight:bold;
+  text-align:center;
+  text-shadow:0 2px 8px #000;
+}
+#start{
+  position:fixed;
+  inset:0;
+  z-index:20;
+  background:radial-gradient(circle,#18215a,#050712 70%);
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  text-align:center;
+}
+.panel{
+  padding:35px;
+  border:2px solid #42e8ff;
+  border-radius:20px;
+  background:rgba(5,10,30,.88);
+  box-shadow:0 0 50px #087bff;
+  max-width:600px;
+}
+.panel h1{
+  margin:0;
+  font-size:55px;
+  letter-spacing:8px;
+  color:#53edff;
+  text-shadow:0 0 25px #00c8ff;
+}
+.panel p{font-size:17px;line-height:1.6}
+button{
+  padding:15px 35px;
+  border:0;
+  border-radius:12px;
+  background:#4defff;
+  color:#031018;
+  font-size:20px;
+  font-weight:bold;
+  cursor:pointer;
+}
+button:hover{transform:scale(1.05)}
+</style>
+</head>
+<body>
+
+<div id="start">
+ <div class="panel">
+   <h1>NEON LEGEND</h1>
+   <p>
+     🌌 Karanlık şehirde efsane ol.<br>
+     ⚔️ Düşmanları yen.<br>
+     ⚡ XP topla ve güçlen.<br>
+     👑 Sonunda NEON BOSS'u bul.
+   </p>
+   <p><b>WASD</b> = Hareket &nbsp; <b>Mouse</b> = Nişan &nbsp; <b>Sol Tık</b> = Ateş</p>
+   <button onclick="startGame()">OYUNA BAŞLA</button>
+ </div>
+</div>
+
+<div id="ui">
+  <div id="title">NEON LEGEND</div>
+  <div id="stats">Seviye: <b id="level">1</b> | XP: <b id="xpt">0</b></div>
+  <div class="bar"><div id="hp"></div></div>
+  <div class="bar"><div id="xp"></div></div>
+  <div id="stats">💰 Skor: <b id="score">0</b> | ⚔️ Güç: <b id="power">1</b></div>
+</div>
+
+<div id="bossbar">
+  <div id="bossname">👑 NEON BOSS</div>
+  <div id="bossfill"><div id="bossinner"></div></div>
+</div>
+
+<div id="message"></div>
+
+<canvas id="game"></canvas>
+
+<script>
+const canvas=document.getElementById("game");
+const ctx=canvas.getContext("2d");
+
+function resize(){
+ canvas.width=innerWidth;
+ canvas.height=innerHeight;
+}
+resize();
+addEventListener("resize",resize);
+
+const keys={};
+const mouse={x:innerWidth/2,y:innerHeight/2,down:false};
+
+addEventListener("keydown",e=>{
+ keys[e.key.toLowerCase()]=true;
+ if(e.key.toLowerCase()==="r" && gameOver) location.reload();
+});
+addEventListener("keyup",e=>keys[e.key.toLowerCase()]=false);
+
+canvas.addEventListener("mousemove",e=>{
+ mouse.x=e.clientX;
+ mouse.y=e.clientY;
+});
+canvas.addEventListener("mousedown",()=>mouse.down=true);
+addEventListener("mouseup",()=>mouse.down=false);
+
+let running=false;
+let gameOver=false;
+let score=0;
+let level=1;
+let xp=0;
+let xpNeed=100;
+let spawnTimer=0;
+let bossSpawned=false;
+let shake=0;
+
+const player={
+ x:innerWidth/2,
+ y:innerHeight/2,
+ r:18,
+ speed:4,
+ hp:100,
+ maxHp:100,
+ damage:20,
+ fireCooldown:0,
+ inv:0
+};
+
+let bullets=[];
+let enemies=[];
+let particles=[];
+let coins=[];
+let stars=[];
+
+for(let i=0;i<180;i++){
+ stars.push({
+  x:Math.random()*3000,
+  y:Math.random()*3000,
+  r:Math.random()*2+0.3,
+  a:Math.random()
+ });
+}
+
+function startGame(){
+ document.getElementById("start").style.display="none";
+ running=true;
+ player.x=canvas.width/2;
+ player.y=canvas.height/2;
+ message("⚡ NEON ŞEHRE HOŞ GELDİN!");
+}
+
+function message(t){
+ const m=document.getElementById("message");
+ m.textContent=t;
+ setTimeout(()=>{
+   if(m.textContent===t)m.textContent="";
+ },1800);
+}
+
+function dist(a,b){
+ return Math.hypot(a.x-b.x,a.y-b.y);
+}
+
+function shoot(){
+ if(player.fireCooldown>0)return;
+
+ let dx=mouse.x-player.x;
+ let dy=mouse.y-player.y;
+ let d=Math.hypot(dx,dy)||1;
+
+ bullets.push({
+  x:player.x,
+  y:player.y,
+  vx:dx/d*10,
+  vy:dy/d*10,
+  r:5,
+  life:80,
+  damage:player.damage
+ });
+
+ player.fireCooldown=8;
+}
+
+function spawnEnemy(){
+ const side=Math.floor(Math.random()*4);
+ let x,y;
+
+ if(side===0){x=-40;y=Math.random()*canvas.height}
+ if(side===1){x=canvas.width+40;y=Math.random()*canvas.height}
+ if(side===2){x=Math.random()*canvas.width;y=-40}
+ if(side===3){x=Math.random()*canvas.width;y=canvas.height+40}
+
+ const elite=Math.random()<0.12;
+
+ enemies.push({
+   x,y,
+   r:elite?23:15,
+   hp:elite?90+level*15:35+level*8,
+   maxHp:elite?90+level*15:35+level*8,
+   speed:elite?1.15:1.5+Math.random()*0.7,
+   damage:elite?16:8,
+   elite,
+   hit:0
+ });
+}
+
+function spawnBoss(){
+ bossSpawned=true;
+
+ enemies.push({
+  x:canvas.width/2,
+  y:-100,
+  r:55,
+  hp:2200,
+  maxHp:2200,
+  speed:0.75,
+  damage:25,
+  boss:true,
+  hit:0,
+  shoot:0
+ });
+
+ document.getElementById("bossbar").style.display="block";
+ message("👑 BOSS GELDİ! KAÇMA!");
+}
+
+function levelUp(){
+ level++;
+ xp-=xpNeed;
+ xpNeed=Math.floor(xpNeed*1.35);
+
+ player.maxHp+=18;
+ player.hp=player.maxHp;
+ player.damage+=8;
+ player.speed+=0.15;
+
+ message("🔥 SEVİYE "+level+"! GÜÇLENDİN!");
+}
+
+function addXP(v){
+ xp+=v;
+ while(xp>=xpNeed)levelUp();
+}
+
+function burst(x,y,count=12){
+ for(let i=0;i<count;i++){
+  let a=Math.random()*Math.PI*2;
+  let s=Math.random()*5+1;
+  particles.push({
+   x,y,
+   vx:Math.cos(a)*s,
+   vy:Math.sin(a)*s,
+   life:35+Math.random()*25,
+   r:Math.random()*4+1
+  });
+ }
+}
+
+function update(){
+ if(!running||gameOver)return;
+
+ if(keys.w)player.y-=player.speed;
+ if(keys.s)player.y+=player.speed;
+ if(keys.a)player.x-=player.speed;
+ if(keys.d)player.x+=player.speed;
+
+ player.x=Math.max(25,Math.min(canvas.width-25,player.x));
+ player.y=Math.max(25,Math.min(canvas.height-25,player.y));
+
+ if(mouse.down)shoot();
+ if(player.fireCooldown>0)player.fireCooldown--;
+ if(player.inv>0)player.inv--;
+
+ spawnTimer--;
+
+ if(spawnTimer<=0 && enemies.filter(e=>!e.boss).length<18){
+   spawnEnemy();
+   spawnTimer=Math.max(12,45-level*2);
+ }
+
+ if(score>=1500 && !bossSpawned)spawnBoss();
+
+ for(let b of bullets){
+   b.x+=b.vx;
+   b.y+=b.vy;
+   b.life--;
+ }
+
+ bullets=bullets.filter(b=>b.life>0);
+
+ for(let e of enemies){
+   if(e.hit>0)e.hit--;
+
+   let dx=player.x-e.x;
+   let dy=player.y-e.y;
+   let d=Math.hypot(dx,dy)||1;
+
+   e.x+=dx/d*e.speed;
+   e.y+=dy/d*e.speed;
+
+   if(e.boss){
+     e.shoot=(e.shoot||0)-1;
+
+     if(e.shoot<=0){
+       for(let i=0;i<10;i++){
+         let a=i*Math.PI*2/10+performance.now()/1000;
+         bullets.push({
+           x:e.x,
+           y:e.y,
+           vx:Math.cos(a)*3.5,
+           vy:Math.sin(a)*3.5,
+           r:8,
+           life:130,
+           damage:14,
+           enemyBullet:true
+         });
+       }
+       e.shoot=80;
+     }
+   }
+
+   if(dist(player,e)<player.r+e.r){
+     if(player.inv<=0){
+       player.hp-=e.damage;
+       player.inv=35;
+       shake=12;
+       burst(player.x,player.y,8);
+
+       if(player.hp<=0){
+         endGame(false);
+       }
+     }
+   }
+ }
+
+ // Mermi çarpışmaları
+ for(let b of bullets){
+   if(b.enemyBullet)continue;
+
+   for(let e of enemies){
+     if(e.hp<=0)continue;
+
+     if(Math.hypot(b.x-e.x,b.y-e.y)<b.r+e.r){
+       e.hp-=b.damage;
+       e.hit=4;
+       b.life=0;
+       burst(b.x,b.y,4);
+
+       if(e.hp<=0){
+         let reward=e.boss?1000:e.elite?120:35;
+         score+=reward;
+         addXP(reward);
+
+         coins.push({
+           x:e.x,
+           y:e.y,
+           r:e.boss?14:7,
+           life:500
+         });
+
+         burst(e.x,e.y,e.boss?50:15);
+
+         if(e.boss){
+           endGame(true);
+         }
+       }
+       break;
+     }
+   }
+ }
+
+ enemies=enemies.filter(e=>e.hp>0);
+ bullets=bullets.filter(b=>b.life>0);
+
+ // düşman mermileri
+ for(let b of bullets){
+   if(!b.enemyBullet)continue;
+
+   if(Math.hypot(b.x-player.x,b.y-player.y)<b.r+player.r){
+     b.life=0;
+
+     if(player.inv<=0){
+       player.hp-=b.damage;
+       player.inv=25;
+       shake=8;
+
+       if(player.hp<=0)endGame(false);
+     }
+   }
+ }
+
+ bullets=bullets.filter(b=>b.life>0);
+
+ for(let c of coins){
+   c.life--;
+   if(dist(player,c)<35){
+     c.life=0;
+     score+=25;
+     addXP(10);
+   }
+ }
+ coins=coins.filter(c=>c.life>0);
+
+ for(let p of particles){
+   p.x+=p.vx;
+   p.y+=p.vy;
+   p.vx*=.96;
+   p.vy*=.96;
+   p.life--;
+ }
+ particles=particles.filter(p=>p.life>0);
+
+ if(shake>0)shake--;
+
+ document.getElementById("level").textContent=level;
+ document.getElementById("xpt").textContent=xp;
+ document.getElementById("score").textContent=score;
+ document.getElementById("power").textContent=player.damage;
+ document.getElementById("hp").style.width=Math.max(0,player.hp/player.maxHp*100)+"%";
+ document.getElementById("xp").style.width=Math.min(100,xp/xpNeed*100)+"%";
+
+ let boss=enemies.find(e=>e.boss);
+ if(boss){
+   document.getElementById("bossinner").style.width=
+      Math.max(0,boss.hp/boss.maxHp*100)+"%";
+ }
+}
+
+function drawBackground(){
+ let g=ctx.createRadialGradient(
+  canvas.width/2,canvas.height/2,100,
+  canvas.width/2,canvas.height/2,800
+ );
+ g.addColorStop(0,"#18275d");
+ g.addColorStop(1,"#03050e");
+ ctx.fillStyle=g;
+ ctx.fillRect(0,0,canvas.width,canvas.height);
+
+ // yıldızlar
+ for(let s of stars){
+   let x=(s.x-player.x*0.15)%canvas.width;
+   let y=(s.y-player.y*0.15)%canvas.height;
+   if(x<0)x+=canvas.width;
+   if(y<0)y+=canvas.height;
+
+   ctx.globalAlpha=.3+s.a*.7;
+   ctx.fillStyle="#8defff";
+   ctx.beginPath();
+   ctx.arc(x,y,s.r,0,Math.PI*2);
+   ctx.fill();
+ }
+ ctx.globalAlpha=1;
+
+ // neon grid
+ ctx.strokeStyle="rgba(30,170,255,.12)";
+ ctx.lineWidth=1;
+
+ let grid=70;
+ let ox=(-player.x*.25)%grid;
+ let oy=(-player.y*.25)%grid;
+
+ for(let x=ox;x<canvas.width;x+=grid){
+   ctx.beginPath();
+   ctx.moveTo(x,0);
+   ctx.lineTo(x,canvas.height);
+   ctx.stroke();
+ }
+ for(let y=oy;y<canvas.height;y+=grid){
+   ctx.beginPath();
+   ctx.moveTo(0,y);
+   ctx.lineTo(canvas.width,y);
+   ctx.stroke();
+ }
+}
+
+function drawPlayer(){
+ ctx.save();
+
+ if(player.inv>0 && Math.floor(player.inv/4)%2===0)
+   ctx.globalAlpha=.35;
+
+ ctx.shadowBlur=25;
+ ctx.shadowColor="#38eaff";
+
+ ctx.fillStyle="#39eaff";
+ ctx.beginPath();
+ ctx.arc(player.x,player.y,player.r,0,Math.PI*2);
+ ctx.fill();
+
+ ctx.fillStyle="#07101c";
+ ctx.beginPath();
+ ctx.arc(player.x,player.y,8,0,Math.PI*2);
+ ctx.fill();
+
+ let a=Math.atan2(mouse.y-player.y,mouse.x-player.x);
+
+ ctx.rotate(a);
+ ctx.fillStyle="#d8ffff";
+ ctx.fillRect(5,-5,27,10);
+
+ ctx.restore();
+}
+
+function drawEnemies(){
+ for(let e of enemies){
+   ctx.save();
+
+   ctx.shadowBlur=e.boss?35:18;
+   ctx.shadowColor=e.boss?"#ff00bb":e.elite?"#ff9d00":"#ff315b";
+
+   ctx.fillStyle=e.boss?"#c9009c":e.elite?"#ff9d00":"#ff315b";
+
+   ctx.beginPath();
+   ctx.arc(e.x,e.y,e.r,0,Math.PI*2);
+   ctx.fill();
+
+   ctx.fillStyle="#16051a";
+   ctx.beginPath();
+   ctx.arc(e.x,e.y,e.r*.42,0,Math.PI*2);
+   ctx.fill();
+
+   ctx.restore();
+
+   if(!e.boss){
+     ctx.fillStyle="#111";
+     ctx.fillRect(e.x-e.r,e.y-e.r-10,e.r*2,4);
+     ctx.fillStyle=e.elite?"#ff9d00":"#ff315b";
+     ctx.fillRect(e.x-e.r,e.y-e.r-10,e.r*2*(e.hp/e.maxHp),4);
+   }
+ }
+}
+
+function drawBullets(){
+ for(let b of bullets){
+   ctx.save();
+   ctx.shadowBlur=18;
+   ctx.shadowColor=b.enemyBullet?"#ff2070":"#54f7ff";
+   ctx.fillStyle=b.enemyBullet?"#ff2070":"#54f7ff";
+   ctx.beginPath();
+   ctx.arc(b.x,b.y,b.r,0,Math.PI*2);
+   ctx.fill();
+   ctx.restore();
+ }
+}
+
+function drawParticles(){
+ for(let p of particles){
+   ctx.globalAlpha=Math.max(0,p.life/50);
+   ctx.fillStyle="#64efff";
+   ctx.beginPath();
+   ctx.arc(p.x,p.y,p.r,0,Math.PI*2);
+   ctx.fill();
+ }
+ ctx.globalAlpha=1;
+}
+
+function drawCoins(){
+ for(let c of coins){
+   ctx.save();
+   ctx.shadowBlur=15;
+   ctx.shadowColor="#ffe65b";
+   ctx.fillStyle="#ffe65b";
+   ctx.beginPath();
+   ctx.arc(c.x,c.y,c.r,0,Math.PI*2);
+   ctx.fill();
+   ctx.restore();
+ }
+}
+
+function drawCrosshair(){
+ ctx.strokeStyle="rgba(100,240,255,.8)";
+ ctx.lineWidth=2;
+
+ ctx.beginPath();
+ ctx.arc(mouse.x,mouse.y,12,0,Math.PI*2);
+ ctx.stroke();
+
+ ctx.beginPath();
+ ctx.moveTo(mouse.x-18,mouse.y);
+ ctx.lineTo(mouse.x-7,mouse.y);
+ ctx.moveTo(mouse.x+7,mouse.y);
+ ctx.lineTo(mouse.x+18,mouse.y);
+ ctx.moveTo(mouse.x,mouse.y-18);
+ ctx.lineTo(mouse.x,mouse.y-7);
+ ctx.moveTo(mouse.x,mouse.y+7);
+ ctx.lineTo(mouse.x,mouse.y+18);
+ ctx.stroke();
+}
+
+function draw(){
+ ctx.save();
+
+ if(shake){
+   ctx.translate(
+     (Math.random()-.5)*shake,
+     (Math.random()-.5)*shake
+   );
+ }
+
+ drawBackground();
+ drawCoins();
+ drawParticles();
+ drawBullets();
+ drawEnemies();
+ drawPlayer();
+
+ ctx.restore();
+
+ drawCrosshair();
+
+ if(gameOver){
+   ctx.fillStyle="rgba(0,0,0,.65)";
+   ctx.fillRect(0,0,canvas.width,canvas.height);
+
+   ctx.textAlign="center";
+   ctx.fillStyle="white";
+   ctx.font="bold 55px Arial";
+
+   ctx.fillText(
+     bossSpawned && score>=2500 ? "EFSANE OLDUN!" : "OYUN BİTTİ",
+     canvas.width/2,
+     canvas.height/2-35
+   );
+
+   ctx.font="22px Arial";
+   ctx.fillText(
+     "Skor: "+score+"   •   Seviye: "+level,
+     canvas.width/2,
+     canvas.height/2+15
+   );
+
+   ctx.font="18px Arial";
+   ctx.fillText(
+     "Yeniden başlamak için R'ye bas",
+     canvas.width/2,
+     canvas.height/2+55
+   );
+ }
+}
+
+function endGame(win){
+ gameOver=true;
+ running=false;
+
+ if(win){
+   message("👑 BOSS YOK EDİLDİ!");
+ }else{
+   message("💀 Düştün...");
+ }
+}
+
+function loop(){
+ update();
+ draw();
+ requestAnimationFrame(loop);
+}
+
+loop();
+</script>
+<a href="index.html" aria-label="Ana sayfaya dön" title="Ana sayfa" style="position:fixed;right:16px;bottom:16px;z-index:2147483647;display:inline-flex;align-items:center;justify-content:center;min-height:44px;padding:0 16px;background:#d8f26a;color:#202820;border:2px solid #202820;border-radius:7px;font:700 14px Arial,sans-serif;text-decoration:none;box-shadow:3px 3px 0 #202820;">Ana sayfa</a>
+</body>
+</html>
+```

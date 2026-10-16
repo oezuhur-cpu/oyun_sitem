@@ -1,0 +1,41 @@
+```html
+<!DOCTYPE html>
+<html lang="tr"><meta charset="UTF-8">
+<title>Son Işık</title>
+<style>
+body{background:#10182c;color:#f4f0ff;font:20px Arial;text-align:center;padding:25px}
+#story{max-width:650px;margin:35px auto;line-height:1.8}
+button{padding:14px;margin:8px;background:#7865ba;color:white;border:0;border-radius:12px;font-size:17px;cursor:pointer}
+</style>
+<h1>🌧️ SON IŞIK</h1><div id="story"></div><div id="choices"></div>
+<script>
+let step=0,trust=0;
+const scenes=[
+["Deniz'in eski mektubunu buldun. Üzerinde tek cümle var: 'Beni unutma.'","Mektubu sakla","Hemen cevap yaz",1,2],
+["Yağmur başladı. Deniz'in en sevdiği parka geldin.","Bekle ve anıları hatırla","İstasyona git",3,4],
+["Mektubun arkasında bir adres var. Belki hâlâ geçerlidir.","Adrese git","Eve dön",4,5],
+["Parkta eski bir fotoğraf buldun. Arkasında 'Saat 6, istasyon' yazıyor.","İstasyona koş","Fotoğrafı incele",4,5],
+["İstasyonda bir defter buldun. Son sayfada sana yazılmış bir not var.","Notu oku","Defteri yanında götür",6,6],
+["Eve döndün. Fakat kapının önünde tanıdık bir zarf duruyor.","Zarfı aç","Yeni bir gün başlat",6,7],
+["Notta şöyle yazıyor: 'Gerçek dostluk, mesafelerle bitmez.' Uzaktan bir ses duydun.","Sese doğru ilerle","Bir süre sessizce bekle",8,8],
+["Gün doğuyor. İçindeki umut yeniden canlanıyor.","Son bir kez ara","Yoluna devam et",8,9],
+["Bir telefon çaldı. Ekranda Deniz'in adı yazıyor. Aramayı açtın. 'Merhaba...'","Gülümseyerek cevap ver","Ona mektup yaz",10,10],
+["Yeni bir sabah. Belki de her son yeni bir başlangıçtır.","Yürüyüşe çık","Yeni bir mektup yaz",10,10]
+];
+function show(){
+if(step>=10){
+document.getElementById('story').innerHTML=
+trust>=4?"💛 MUTLU SON<br>Deniz'le yeniden buluştun. Birlikte yeni anılar biriktirmeye karar verdiniz.":"🌅 UMUTLU SON<br>Henüz buluşamadınız ama birbirinizi unutmadınız. Hikâyeniz devam ediyor.";
+document.getElementById('choices').innerHTML='<button onclick="step=0;trust=0;show()">Yeniden oyna</button>';return}
+let s=scenes[step];
+document.getElementById('story').innerHTML=
+`Bölüm ${step+1}<hr>${s[0]}`;
+document.getElementById('choices').innerHTML='';
+[s[1],s[2]].forEach((t,i)=>{
+let b=document.createElement('button');b.textContent=t;
+b.onclick=()=>{trust+=i===0?1:0;step=s[3+i];show()};
+document.getElementById('choices').appendChild(b)});
+}
+show();
+</script><a href="index.html" aria-label="Ana sayfaya dön" title="Ana sayfa" style="position:fixed;right:16px;bottom:16px;z-index:2147483647;display:inline-flex;align-items:center;justify-content:center;min-height:44px;padding:0 16px;background:#d8f26a;color:#202820;border:2px solid #202820;border-radius:7px;font:700 14px Arial,sans-serif;text-decoration:none;box-shadow:3px 3px 0 #202820;">Ana sayfa</a></html>
+```

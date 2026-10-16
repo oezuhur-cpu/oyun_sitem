@@ -1,0 +1,504 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+<meta charset="UTF-8">
+<title>COMMAND TABLE</title>
+<style>
+*{box-sizing:border-box}
+body{
+    margin:0;
+    background:#11151a;
+    color:#eee;
+    font-family:monospace;
+}
+#game{
+    width:1200px;
+    max-width:98vw;
+    margin:15px auto;
+    background:#1c2521;
+    border:4px solid #59635b;
+    box-shadow:0 0 30px #000;
+}
+header{
+    height:70px;
+    background:#151b20;
+    display:flex;
+    align-items:center;
+    justify-content:space-around;
+    border-bottom:2px solid #4b554e;
+}
+.stat{
+    padding:8px 20px;
+    border-left:1px solid #444;
+}
+.stat b{
+    color:#9bd66b;
+    font-size:20px;
+}
+#main{
+    display:grid;
+    grid-template-columns:760px 1fr;
+}
+#map{
+    position:relative;
+    height:650px;
+    overflow:hidden;
+    background:#314936;
+    border-right:3px solid #555;
+}
+#board{
+    position:absolute;
+    inset:0;
+}
+#panel{
+    padding:15px;
+    background:#20282a;
+}
+h2{
+    margin:5px 0 15px;
+    color:#b9d58b;
+}
+button{
+    width:100%;
+    padding:12px;
+    margin:5px 0;
+    background:#37453d;
+    color:white;
+    border:1px solid #71806e;
+    font:bold 15px monospace;
+    cursor:pointer;
+}
+button:hover{
+    background:#52654e;
+}
+.log{
+    height:245px;
+    overflow:auto;
+    background:#111619;
+    border:1px solid #4b5650;
+    padding:8px;
+    font-size:12px;
+}
+.good{color:#9bdd70}
+.bad{color:#e47b6e}
+.info{color:#8fc7e8}
+#message{
+    position:absolute;
+    bottom:15px;
+    left:15px;
+    right:15px;
+    padding:12px;
+    background:rgba(10,15,12,.9);
+    border:2px solid #75846d;
+    text-align:center;
+}
+</style>
+</head>
+
+<body>
+
+<div id="game">
+
+<header>
+    <div class="stat">ÜLKE<br><b>VERDANA</b></div>
+    <div class="stat">HAZİNE<br><b id="money">800</b></div>
+    <div class="stat">MORAL<br><b id="morale">75</b></div>
+    <div class="stat">GÜÇ<br><b id="power">100</b></div>
+    <div class="stat">TUR<br><b id="turn">1</b></div>
+</header>
+
+<div id="main">
+
+<div id="map">
+<canvas id="board" width="760" height="650"></canvas>
+<div id="message">Bir bölge seç ve karar masasında emir ver.</div>
+</div>
+
+<div id="panel">
+
+<h2>KARAR MASASI</h2>
+
+<button onclick="choose('guard')">
+🛡 SAVUNMA DÜZENİ
+</button>
+
+<button onclick="choose('advance')">
+⚔ İLERLEME EMRİ
+</button>
+
+<button onclick="choose('support')">
+📡 DESTEK GÖNDER
+</button>
+
+<button onclick="choose('diplomacy')">
+🤝 DİPLOMASİ
+</button>
+
+<button onclick="choose('economy')">
+💰 EKONOMİYE YATIRIM
+</button>
+
+<button onclick="choose('recon')">
+🔭 KEŞİF RAPORU
+</button>
+
+<button onclick="nextTurn()">
+▶ TURU BİTİR
+</button>
+
+<h2>ORDU</h2>
+
+<div>
+🛡 Savunma: <span id="def">40</span><br>
+⚡ Hareket: <span id="speed">35</span><br>
+🎖 Moral: <span id="armyMorale">70</span><br>
+📦 Lojistik: <span id="supply">65</span>
+</div>
+
+<h2>RAPORLAR</h2>
+
+<div class="log" id="log">
+<div class="info">Komuta merkezi hazır.</div>
+<div>Harita üzerinde bir bölge seç.</div>
+</div>
+
+</div>
+</div>
+</div>
+
+<script>
+
+const canvas=document.getElementById("board");
+const ctx=canvas.getContext("2d");
+
+let money=800;
+let morale=75;
+let power=100;
+let turn=1;
+
+let army={
+    def:40,
+    speed:35,
+    morale:70,
+    supply:65
+};
+
+let selected=null;
+
+const zones=[
+    {name:"KUZEY",x:130,y:150,owner:"Verdana",value:20},
+    {name:"DOĞU",x:510,y:170,owner:"Ravik",value:30},
+    {name:"MERKEZ",x:330,y:310,owner:"Verdana",value:40},
+    {name:"BATI",x:120,y:420,owner:"Lunor",value:25},
+    {name:"GÜNEY",x:500,y:450,owner:"Ravik",value:35}
+];
+
+function draw(){
+
+    ctx.clearRect(0,0,760,650);
+
+    // Zemin
+    ctx.fillStyle="#314936";
+    ctx.fillRect(0,0,760,650);
+
+    // Grid
+    ctx.strokeStyle="rgba(210,230,180,.08)";
+    for(let x=0;x<760;x+=40){
+        ctx.beginPath();
+        ctx.moveTo(x,0);
+        ctx.lineTo(x,650);
+        ctx.stroke();
+    }
+
+    for(let y=0;y<650;y+=40){
+        ctx.beginPath();
+        ctx.moveTo(0,y);
+        ctx.lineTo(760,y);
+        ctx.stroke();
+    }
+
+    // Nehir
+    ctx.strokeStyle="#547e88";
+    ctx.lineWidth=18;
+    ctx.beginPath();
+    ctx.moveTo(0,300);
+    ctx.bezierCurveTo(180,250,250,380,390,300);
+    ctx.bezierCurveTo(540,220,620,300,760,240);
+    ctx.stroke();
+
+    // Bölgeler
+    for(const z of zones){
+
+        let color="#566653";
+
+        if(z.owner==="Verdana") color="#60784e";
+        if(z.owner==="Ravik") color="#765957";
+        if(z.owner==="Lunor") color="#596278";
+
+        ctx.fillStyle=color;
+
+        ctx.beginPath();
+        ctx.arc(z.x,z.y,72,0,Math.PI*2);
+        ctx.fill();
+
+        ctx.strokeStyle=
+            selected===z ? "#fff" : "#9cae91";
+
+        ctx.lineWidth=selected===z ? 5 : 2;
+
+        ctx.stroke();
+
+        ctx.fillStyle="#fff";
+        ctx.font="bold 15px monospace";
+        ctx.textAlign="center";
+        ctx.fillText(z.name,z.x,z.y-5);
+
+        ctx.font="11px monospace";
+        ctx.fillText(z.owner,z.x,z.y+14);
+
+        // Birlik göstergesi
+        if(z.owner==="Verdana"){
+            ctx.fillStyle="#9bd66b";
+            ctx.fillRect(z.x-28,z.y+28,56,6);
+        }else{
+            ctx.fillStyle="#d46d67";
+            ctx.fillRect(z.x-28,z.y+28,56,6);
+        }
+    }
+
+    // Komuta masası işareti
+    ctx.fillStyle="#d5dfc7";
+    ctx.font="bold 18px monospace";
+    ctx.textAlign="left";
+    ctx.fillText("COMMAND MAP",20,35);
+
+    // Seçili bölge
+    if(selected){
+        ctx.fillStyle="#fff";
+        ctx.font="bold 13px monospace";
+        ctx.fillText(
+            "SEÇİLİ: "+selected.name,
+            20,
+            60
+        );
+    }
+}
+
+canvas.addEventListener("click",e=>{
+
+    const r=canvas.getBoundingClientRect();
+
+    const mx=(e.clientX-r.left)*760/r.width;
+    const my=(e.clientY-r.top)*650/r.height;
+
+    selected=null;
+
+    for(const z of zones){
+
+        const dx=mx-z.x;
+        const dy=my-z.y;
+
+        if(Math.sqrt(dx*dx+dy*dy)<75){
+            selected=z;
+            break;
+        }
+    }
+
+    if(selected){
+        message(
+            selected.name+
+            " bölgesi seçildi. Emirini ver, komutan."
+        );
+    }
+
+    draw();
+});
+
+function choose(type){
+
+    if(!selected){
+        message("Önce haritadan bir bölge seç.");
+        return;
+    }
+
+    if(type==="guard"){
+
+        army.def+=8;
+        army.supply-=3;
+        morale+=2;
+
+        log("Savunma düzeni kuruldu. Savunma gücü arttı.","good");
+    }
+
+    if(type==="advance"){
+
+        if(army.supply<10){
+            log("Lojistik yetersiz. İlerleme yapılamadı.","bad");
+            return;
+        }
+
+        army.speed+=6;
+        army.supply-=8;
+        power+=4;
+
+        log(
+            selected.name+
+            " bölgesinde ilerleme emri verildi.",
+            "info"
+        );
+    }
+
+    if(type==="support"){
+
+        if(money<100){
+            log("Destek için yeterli kaynak yok.","bad");
+            return;
+        }
+
+        money-=100;
+        army.morale+=7;
+        army.supply+=8;
+
+        log("Bölgeye destek gönderildi.","good");
+    }
+
+    if(type==="diplomacy"){
+
+        const chance=Math.random();
+
+        if(chance>.4){
+            money+=120;
+            morale+=5;
+            log("Diplomatik görüşme başarılı. Ticaret anlaşması yapıldı.","good");
+        }else{
+            morale-=3;
+            log("Görüşmeler sonuçsuz kaldı.","bad");
+        }
+    }
+
+    if(type==="economy"){
+
+        money+=160;
+        power+=2;
+
+        log("Ekonomik yatırım yapıldı. Hazine güçlendi.","good");
+    }
+
+    if(type==="recon"){
+
+        const n=Math.floor(Math.random()*30)+20;
+
+        log(
+            "Keşif raporu: Rakip bölgelerdeki hareketlilik "+n+"%.",
+            "info"
+        );
+    }
+
+    updateUI();
+}
+
+function nextTurn(){
+
+    turn++;
+
+    money+=90;
+
+    army.supply-=5;
+
+    if(army.supply<30){
+        morale-=4;
+        log("Lojistik sıkıntısı moral düşürdü.","bad");
+    }
+
+    // Rakibin soyut hamlesi
+    const enemy=Math.floor(Math.random()*10);
+
+    if(enemy>6){
+
+        power-=3;
+        morale-=2;
+
+        log(
+            "Rakip baskı oluşturdu. Güç dengesi değişti.",
+            "bad"
+        );
+
+    }else{
+
+        log(
+            "Tur sakin geçti. Yeni raporlar bekleniyor.",
+            "info"
+        );
+    }
+
+    if(power<=0){
+        power=0;
+        endGame("Komuta gücün tükendi.");
+    }
+
+    if(morale<=0){
+        morale=0;
+        endGame("Moral tamamen çöktü.");
+    }
+
+    updateUI();
+}
+
+function updateUI(){
+
+    document.getElementById("money").textContent=money;
+    document.getElementById("morale").textContent=morale;
+    document.getElementById("power").textContent=power;
+    document.getElementById("turn").textContent=turn;
+
+    document.getElementById("def").textContent=army.def;
+    document.getElementById("speed").textContent=army.speed;
+    document.getElementById("armyMorale").textContent=army.morale;
+    document.getElementById("supply").textContent=army.supply;
+
+    draw();
+}
+
+function message(t){
+    document.getElementById("message").textContent=t;
+}
+
+function log(t,c){
+
+    const box=document.getElementById("log");
+
+    const div=document.createElement("div");
+
+    div.className=c||"";
+
+    div.textContent=
+        "[TUR "+turn+"] "+t;
+
+    box.prepend(div);
+}
+
+function endGame(reason){
+
+    playing=false;
+
+    setTimeout(()=>{
+
+        alert(
+            "KOMUTA SONA ERDİ\n\n"+
+            reason+
+            "\n\nToplam tur: "+turn+
+            "\nSkor: "+power
+        );
+
+        location.reload();
+
+    },100);
+}
+
+updateUI();
+
+</script>
+
+<a href="index.html" aria-label="Ana sayfaya dön" title="Ana sayfa" style="position:fixed;right:16px;bottom:16px;z-index:2147483647;display:inline-flex;align-items:center;justify-content:center;min-height:44px;padding:0 16px;background:#d8f26a;color:#202820;border:2px solid #202820;border-radius:7px;font:700 14px Arial,sans-serif;text-decoration:none;box-shadow:3px 3px 0 #202820;">Ana sayfa</a>
+</body>
+</html>

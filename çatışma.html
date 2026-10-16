@@ -1,0 +1,643 @@
+Aşağıdaki kodu `oyun.html` olarak kaydedip tarayıcıda aç:
+
+```html
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Çatışma Arenası</title>
+<style>
+*{box-sizing:border-box}
+body{
+  margin:0;background:#080b12;color:white;
+  font-family:Arial,sans-serif;overflow:hidden
+}
+#wrap{height:100vh;display:flex;flex-direction:column}
+#hud{
+  height:58px;background:#111827;border-bottom:2px solid #263244;
+  display:flex;align-items:center;gap:14px;padding:8px 14px;
+  font-weight:bold;flex-wrap:wrap
+}
+.stat{background:#1b2535;padding:8px 12px;border-radius:9px}
+#game{
+  flex:1;display:block;width:100%;height:calc(100vh - 58px);
+  background:#101722;cursor:crosshair
+}
+#tip{
+  position:absolute;left:50%;top:70px;transform:translateX(-50%);
+  background:#111827dd;padding:8px 14px;border-radius:10px;
+  pointer-events:none
+}
+#over{
+  position:absolute;inset:0;background:#000b;display:none;
+  align-items:center;justify-content:center;text-align:center
+}
+.panel{background:#111827;border:2px solid #334155;border-radius:18px;padding:30px;max-width:430px}
+button{
+  border:0;border-radius:10px;padding:12px 20px;
+  background:#2563eb;color:white;font-size:16px;font-weight:bold;
+  cursor:pointer
+}
+button:hover{filter:brightness(1.15)}
+</style>
+</head>
+<body>
+
+<div id="wrap">
+<div id="hud">
+  <div class="stat">❤️ CAN <span id="hp">100</span></div>
+  <div class="stat">⚡ ENERJİ <span id="energy">100</span></div>
+  <div class="stat">⭐ SKOR <span id="score">0</span></div>
+  <div class="stat">🌊 DALGA <span id="wave">1</span></div>
+  <div class="stat">💥 YENİLENEN <span id="kills">0</span></div>
+  <div class="stat">⬆️ SEVİYE <span id="level">1</span></div>
+</div>
+
+<canvas id="game"></canvas>
+<div id="tip">WASD: Hareket • Mouse: Nişan • Sol tık: Ateş • SPACE: Özel saldırı</div>
+
+<div id="over">
+ <div class="panel">
+   <h1 id="overTitle">OYUN BİTTİ</h1>
+   <p id="overText"></p>
+   <button onclick="restart()">TEKRAR OYNA</button>
+ </div>
+</div>
+</div>
+
+<script>
+const canvas=document.getElementById("game");
+const ctx=canvas.getContext("2d");
+
+let W,H;
+function resize(){
+  W=canvas.width=innerWidth;
+  H=canvas.height=innerHeight-58;
+}
+addEventListener("resize",resize);
+resize();
+
+const keys={};
+const mouse={x:W/2,y:H/2,down:false};
+
+addEventListener("keydown",e=>{
+  keys[e.key.toLowerCase()]=true;
+  if(e.code==="Space") special();
+});
+addEventListener("keyup",e=>keys[e.key.toLowerCase()]=false);
+
+canvas.addEventListener("mousemove",e=>{
+  mouse.x=e.clientX;
+  mouse.y=e.clientY-58;
+});
+canvas.addEventListener("mousedown",()=>mouse.down=true);
+addEventListener("mouseup",()=>mouse.down=false);
+
+let player,enemies,bullets,enemyBullets,particles,pickups;
+let score,kills,wave,level,xp,nextXP,gameOver;
+let spawnTimer,waveTimer,shake;
+let last=performance.now();
+
+function reset(){
+  player={
+    x:W/2,y:H/2,r:18,
+    hp:100,maxHp:100,
+    energy:100,
+    speed:4.2,
+    fireDelay:0,
+    damage:1,
+    bulletSpeed:10,
+    specialCooldown:0
+  };
+
+  enemies=[];
+  bullets=[];
+  enemyBullets=[];
+  particles=[];
+  pickups=[];
+
+  score=0;
+  kills=0;
+  wave=1;
+  level=1;
+  xp=0;
+  nextXP=8;
+  gameOver=false;
+  spawnTimer=0;
+  waveTimer=0;
+  shake=0;
+
+  document.getElementById("over").style.display="none";
+}
+
+function randomEdge(){
+  let side=Math.floor(Math.random()*4);
+
+  if(side===0)return {x:-40,y:Math.random()*H};
+  if(side===1)return {x:W+40,y:Math.random()*H};
+  if(side===2)return {x:Math.random()*W,y:-40};
+  return {x:Math.random()*W,y:H+40};
+}
+
+function spawnEnemy(){
+  const p=randomEdge();
+  const type=Math.random();
+
+  let e;
+
+  if(type<0.12){
+    e={
+      x:p.x,y:p.y,r:30,
+      hp:12,maxHp:12,
+      speed:0.65,
+      damage:15,
+      color:"#a855f7",
+      boss:true,
+      shoot:100
+    };
+  }
+  else if(type<0.35){
+    e={
+      x:p.x,y:p.y,r:12,
+      hp:2,maxHp:2,
+      speed:2.3,
+      damage:7,
+      color:"#f97316",
+      boss:false,
+      shoot:999
+    };
+  }
+  else{
+    e={
+      x:p.x,y:p.y,r:17,
+      hp:4,maxHp:4,
+      speed:1.05,
+      damage:10,
+      color:"#ef4444",
+      boss:false,
+      shoot:90+Math.random()*100
+    };
+  }
+
+  enemies.push(e);
+}
+
+function shoot(){
+  if(gameOver||player.fireDelay>0)return;
+
+  player.fireDelay=9;
+
+  const a=Math.atan2(mouse.y-player.y,mouse.x-player.x);
+
+  bullets.push({
+    x:player.x+Math.cos(a)*20,
+    y:player.y+Math.sin(a)*20,
+    vx:Math.cos(a)*player.bulletSpeed,
+    vy:Math.sin(a)*player.bulletSpeed,
+    damage:player.damage,
+    life:70
+  });
+
+  burst(
+    player.x+Math.cos(a)*20,
+    player.y+Math.sin(a)*20,
+    3,
+    "#facc15"
+  );
+}
+
+function special(){
+  if(gameOver||player.specialCooldown>0||player.energy<35)return;
+
+  player.energy-=35;
+  player.specialCooldown=180;
+
+  for(let i=0;i<22;i++){
+    const a=Math.PI*2*i/22;
+
+    bullets.push({
+      x:player.x,
+      y:player.y,
+      vx:Math.cos(a)*7,
+      vy:Math.sin(a)*7,
+      damage:3,
+      life:65,
+      special:true
+    });
+  }
+
+  burst(player.x,player.y,45,"#38bdf8");
+  shake=12;
+}
+
+function enemyShoot(e){
+  const a=Math.atan2(player.y-e.y,player.x-e.x);
+
+  enemyBullets.push({
+    x:e.x,
+    y:e.y,
+    vx:Math.cos(a)*4,
+    vy:Math.sin(a)*4,
+    damage:e.boss?14:6,
+    life:150
+  });
+}
+
+function burst(x,y,n,color){
+  for(let i=0;i<n;i++){
+    const a=Math.random()*Math.PI*2;
+    const s=1+Math.random()*5;
+
+    particles.push({
+      x,y,
+      vx:Math.cos(a)*s,
+      vy:Math.sin(a)*s,
+      life:20+Math.random()*30,
+      color
+    });
+  }
+}
+
+function gainXP(n){
+  xp+=n;
+
+  if(xp>=nextXP){
+    xp-=nextXP;
+    level++;
+    nextXP=Math.floor(nextXP*1.35);
+
+    player.maxHp+=12;
+    player.hp=Math.min(player.maxHp,player.hp+30);
+    player.damage+=0.45;
+    player.speed+=0.12;
+
+    burst(player.x,player.y,30,"#22c55e");
+  }
+}
+
+function dropPickup(x,y){
+  if(Math.random()<0.22){
+    pickups.push({
+      x,y,
+      r:10,
+      type:Math.random()<0.5?"heal":"energy",
+      life:500
+    });
+  }
+}
+
+function killEnemy(i){
+  const e=enemies[i];
+
+  score+=e.boss?500:100;
+  kills++;
+
+  gainXP(e.boss?5:1);
+  dropPickup(e.x,e.y);
+
+  burst(e.x,e.y,e.boss?35:14,e.color);
+
+  enemies.splice(i,1);
+}
+
+function damagePlayer(d){
+  player.hp-=d;
+  shake=7;
+
+  burst(player.x,player.y,8,"#ef4444");
+
+  if(player.hp<=0){
+    player.hp=0;
+    endGame();
+  }
+}
+
+function update(){
+  if(gameOver)return;
+
+  /* hareket */
+  let dx=0,dy=0;
+
+  if(keys["w"])dy--;
+  if(keys["s"])dy++;
+  if(keys["a"])dx--;
+  if(keys["d"])dx++;
+
+  if(dx||dy){
+    const len=Math.hypot(dx,dy);
+    player.x+=dx/len*player.speed;
+    player.y+=dy/len*player.speed;
+  }
+
+  player.x=Math.max(20,Math.min(W-20,player.x));
+  player.y=Math.max(20,Math.min(H-20,player.y));
+
+  if(mouse.down)shoot();
+
+  player.fireDelay=Math.max(0,player.fireDelay-1);
+  player.specialCooldown=Math.max(0,player.specialCooldown-1);
+  player.energy=Math.min(100,player.energy+0.08);
+
+  /* düşman oluştur */
+  spawnTimer--;
+
+  if(spawnTimer<=0){
+    spawnEnemy();
+    spawnTimer=Math.max(18,65-wave*3);
+  }
+
+  /* dalga */
+  waveTimer++;
+
+  if(waveTimer>1000){
+    wave++;
+    waveTimer=0;
+
+    for(let i=0;i<2+wave;i++)spawnEnemy();
+  }
+
+  /* mermiler */
+  for(let i=bullets.length-1;i>=0;i--){
+    const b=bullets[i];
+
+    b.x+=b.vx;
+    b.y+=b.vy;
+    b.life--;
+
+    let remove=b.life<=0||
+      b.x<-50||b.x>W+50||b.y<-50||b.y>H+50;
+
+    for(let j=enemies.length-1;j>=0&&!remove;j--){
+      const e=enemies[j];
+
+      if(Math.hypot(b.x-e.x,b.y-e.y)<e.r+5){
+        e.hp-=b.damage;
+
+        burst(b.x,b.y,4,"#fbbf24");
+
+        remove=true;
+
+        if(e.hp<=0)killEnemy(j);
+      }
+    }
+
+    if(remove)bullets.splice(i,1);
+  }
+
+  /* düşmanlar */
+  for(let i=enemies.length-1;i>=0;i--){
+    const e=enemies[i];
+
+    const dx=player.x-e.x;
+    const dy=player.y-e.y;
+    const d=Math.hypot(dx,dy)||1;
+
+    e.x+=dx/d*e.speed;
+    e.y+=dy/d*e.speed;
+
+    e.shoot--;
+
+    if(e.shoot<=0&&d<600){
+      enemyShoot(e);
+      e.shoot=e.boss?55:130+Math.random()*100;
+    }
+
+    if(d<e.r+player.r){
+      damagePlayer(e.damage*0.025);
+    }
+  }
+
+  /* düşman mermileri */
+  for(let i=enemyBullets.length-1;i>=0;i--){
+    const b=enemyBullets[i];
+
+    b.x+=b.vx;
+    b.y+=b.vy;
+    b.life--;
+
+    if(
+      Math.hypot(b.x-player.x,b.y-player.y)<player.r+5
+    ){
+      damagePlayer(b.damage);
+      enemyBullets.splice(i,1);
+      continue;
+    }
+
+    if(b.life<=0)enemyBullets.splice(i,1);
+  }
+
+  /* kutular */
+  for(let i=pickups.length-1;i>=0;i--){
+    const p=pickups[i];
+    p.life--;
+
+    if(Math.hypot(p.x-player.x,p.y-player.y)<25){
+      if(p.type==="heal"){
+        player.hp=Math.min(player.maxHp,player.hp+30);
+      }else{
+        player.energy=Math.min(100,player.energy+45);
+      }
+
+      burst(p.x,p.y,12,p.type==="heal"?"#22c55e":"#38bdf8");
+      pickups.splice(i,1);
+      continue;
+    }
+
+    if(p.life<=0)pickups.splice(i,1);
+  }
+
+  /* parçacık */
+  for(let i=particles.length-1;i>=0;i--){
+    const p=particles[i];
+
+    p.x+=p.vx;
+    p.y+=p.vy;
+    p.vx*=0.96;
+    p.vy*=0.96;
+    p.life--;
+
+    if(p.life<=0)particles.splice(i,1);
+  }
+
+  updateHUD();
+}
+
+function draw(){
+  ctx.save();
+
+  if(shake>0){
+    ctx.translate(
+      (Math.random()-.5)*shake,
+      (Math.random()-.5)*shake
+    );
+    shake*=0.86;
+  }
+
+  ctx.fillStyle="#0b1220";
+  ctx.fillRect(0,0,W,H);
+
+  /* arena çizgileri */
+  ctx.strokeStyle="rgba(255,255,255,.035)";
+  ctx.lineWidth=1;
+
+  for(let x=0;x<W;x+=50){
+    ctx.beginPath();
+    ctx.moveTo(x,0);
+    ctx.lineTo(x,H);
+    ctx.stroke();
+  }
+
+  for(let y=0;y<H;y+=50){
+    ctx.beginPath();
+    ctx.moveTo(0,y);
+    ctx.lineTo(W,y);
+    ctx.stroke();
+  }
+
+  /* merkez alan */
+  ctx.beginPath();
+  ctx.arc(W/2,H/2,100,0,Math.PI*2);
+  ctx.strokeStyle="rgba(56,189,248,.12)";
+  ctx.lineWidth=3;
+  ctx.stroke();
+
+  /* pickup */
+  for(const p of pickups){
+    ctx.beginPath();
+    ctx.arc(p.x,p.y,p.r,0,Math.PI*2);
+    ctx.fillStyle=p.type==="heal"?"#22c55e":"#38bdf8";
+    ctx.fill();
+
+    ctx.fillStyle="white";
+    ctx.font="bold 12px Arial";
+    ctx.textAlign="center";
+    ctx.fillText(
+      p.type==="heal"?"+":"⚡",
+      p.x,p.y+4
+    );
+  }
+
+  /* düşman mermileri */
+  for(const b of enemyBullets){
+    ctx.beginPath();
+    ctx.arc(b.x,b.y,5,0,Math.PI*2);
+    ctx.fillStyle="#fb7185";
+    ctx.fill();
+  }
+
+  /* player mermileri */
+  for(const b of bullets){
+    ctx.beginPath();
+    ctx.arc(b.x,b.y,b.special?5:4,0,Math.PI*2);
+    ctx.fillStyle=b.special?"#38bdf8":"#facc15";
+    ctx.fill();
+  }
+
+  /* düşmanlar */
+  for(const e of enemies){
+    ctx.beginPath();
+    ctx.arc(e.x,e.y,e.r,0,Math.PI*2);
+    ctx.fillStyle=e.color;
+    ctx.fill();
+
+    if(e.boss){
+      ctx.strokeStyle="#e879f9";
+      ctx.lineWidth=4;
+      ctx.stroke();
+    }
+
+    /* can çubuğu */
+    ctx.fillStyle="#111";
+    ctx.fillRect(e.x-e.r,e.y-e.r-10,e.r*2,4);
+
+    ctx.fillStyle="#22c55e";
+    ctx.fillRect(
+      e.x-e.r,
+      e.y-e.r-10,
+      e.r*2*(e.hp/e.maxHp),
+      4
+    );
+  }
+
+  /* parçacıklar */
+  for(const p of particles){
+    ctx.globalAlpha=Math.max(0,p.life/40);
+    ctx.fillStyle=p.color;
+    ctx.fillRect(p.x,p.y,4,4);
+  }
+
+  ctx.globalAlpha=1;
+
+  /* oyuncu */
+  const a=Math.atan2(
+    mouse.y-player.y,
+    mouse.x-player.x
+  );
+
+  ctx.save();
+  ctx.translate(player.x,player.y);
+  ctx.rotate(a);
+
+  ctx.fillStyle="#2563eb";
+  ctx.fillRect(-12,-12,24,24);
+
+  ctx.fillStyle="#93c5fd";
+  ctx.fillRect(8,-5,22,10);
+
+  ctx.restore();
+
+  ctx.beginPath();
+  ctx.arc(player.x,player.y,player.r+5,0,Math.PI*2);
+  ctx.strokeStyle="rgba(96,165,250,.25)";
+  ctx.stroke();
+
+  ctx.restore();
+}
+
+function updateHUD(){
+  document.getElementById("hp").textContent=
+    Math.round(player.hp)+"/"+player.maxHp;
+
+  document.getElementById("energy").textContent=
+    Math.round(player.energy);
+
+  document.getElementById("score").textContent=score;
+  document.getElementById("wave").textContent=wave;
+  document.getElementById("kills").textContent=kills;
+  document.getElementById("level").textContent=level;
+}
+
+function endGame(){
+  gameOver=true;
+
+  document.getElementById("over").style.display="flex";
+  document.getElementById("overTitle").textContent="💥 ELENDİN";
+  document.getElementById("overText").innerHTML=
+    "Skor: <b>"+score+
+    "</b><br>Dalga: <b>"+wave+
+    "</b><br>Yenilen düşman: <b>"+kills+
+    "</b><br>Seviye: <b>"+level+"</b>";
+}
+
+function restart(){
+  reset();
+}
+
+function loop(now){
+  const dt=Math.min(2,(now-last)/16.67);
+  last=now;
+
+  update();
+  draw();
+
+  requestAnimationFrame(loop);
+}
+
+reset();
+requestAnimationFrame(loop);
+</script>
+<a href="index.html" aria-label="Ana sayfaya dön" title="Ana sayfa" style="position:fixed;right:16px;bottom:16px;z-index:2147483647;display:inline-flex;align-items:center;justify-content:center;min-height:44px;padding:0 16px;background:#d8f26a;color:#202820;border:2px solid #202820;border-radius:7px;font:700 14px Arial,sans-serif;text-decoration:none;box-shadow:3px 3px 0 #202820;">Ana sayfa</a>
+</body>
+</html>
+```

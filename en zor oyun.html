@@ -1,0 +1,391 @@
+```html
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>AŞIRI ZOR OYUN</title>
+
+<style>
+    * {
+        box-sizing: border-box;
+    }
+
+    body {
+        margin: 0;
+        overflow: hidden;
+        background: #080808;
+        font-family: Arial, sans-serif;
+        color: white;
+    }
+
+    canvas {
+        display: block;
+        margin: auto;
+        background: #151515;
+    }
+
+    #ui {
+        position: fixed;
+        top: 10px;
+        left: 10px;
+        z-index: 5;
+        font-size: 20px;
+        line-height: 1.6;
+        text-shadow: 2px 2px #000;
+    }
+
+    #basla {
+        position: fixed;
+        inset: 0;
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        flex-direction: column;
+        background: rgba(0,0,0,.9);
+        z-index: 10;
+    }
+
+    #basla h1 {
+        font-size: 55px;
+        color: #ff3333;
+        text-align: center;
+        margin: 10px;
+    }
+
+    button {
+        font-size: 25px;
+        padding: 15px 35px;
+        border: 0;
+        border-radius: 12px;
+        cursor: pointer;
+        background: #ff3333;
+        color: white;
+        font-weight: bold;
+    }
+
+    button:hover {
+        transform: scale(1.08);
+    }
+</style>
+</head>
+
+<body>
+
+<div id="ui">
+    ❤️ Can: <span id="can">3</span><br>
+    ⭐ Puan: <span id="puan">0</span><br>
+    🏁 Bölüm: <span id="bolum">1</span>
+</div>
+
+<div id="basla">
+    <h1>AŞIRI ZOR OYUN</h1>
+    <p>WASD / Ok tuşları ile hareket et</p>
+    <p>Kırmızı düşmanlara değme!</p>
+    <button onclick="baslat()">BAŞLA</button>
+</div>
+
+<canvas id="oyun"></canvas>
+
+<script>
+
+const canvas = document.getElementById("oyun");
+const ctx = canvas.getContext("2d");
+
+canvas.width = 1000;
+canvas.height = 650;
+
+let oyuncu;
+let dusmanlar = [];
+let engeller = [];
+let puan = 0;
+let can = 3;
+let bolum = 1;
+let oyunAktif = false;
+let tuslar = {};
+
+document.addEventListener("keydown", e => {
+    tuslar[e.key.toLowerCase()] = true;
+
+    if (
+        ["ArrowUp","ArrowDown","ArrowLeft","ArrowRight"].includes(e.key)
+    ) {
+        e.preventDefault();
+    }
+});
+
+document.addEventListener("keyup", e => {
+    tuslar[e.key.toLowerCase()] = false;
+});
+
+function baslat() {
+
+    document.getElementById("basla").style.display = "none";
+
+    puan = 0;
+    can = 3;
+    bolum = 1;
+
+    oyuncu = {
+        x: 70,
+        y: 300,
+        w: 30,
+        h: 30,
+        hiz: 5
+    };
+
+    dusmanlar = [];
+    engeller = [];
+
+    yeniBolum();
+
+    oyunAktif = true;
+
+    oyunDongusu();
+}
+
+function yeniBolum() {
+
+    dusmanlar = [];
+    engeller = [];
+
+    oyuncu.x = 70;
+    oyuncu.y = canvas.height / 2;
+
+    // Engeller
+    for (let i = 0; i < 8 + bolum * 2; i++) {
+
+        engeller.push({
+            x: 150 + Math.random() * 700,
+            y: 50 + Math.random() * 520,
+            w: 30 + Math.random() * 50,
+            h: 30 + Math.random() * 80
+        });
+    }
+
+    // Düşmanlar
+    for (let i = 0; i < 2 + bolum; i++) {
+
+        dusmanlar.push({
+            x: 500 + Math.random() * 450,
+            y: Math.random() * 600,
+            r: 18,
+            hiz: 1.2 + bolum * 0.35
+        });
+    }
+
+    document.getElementById("bolum").textContent = bolum;
+}
+
+function hareket() {
+
+    let eskiX = oyuncu.x;
+    let eskiY = oyuncu.y;
+
+    if (tuslar["w"] || tuslar["arrowup"])
+        oyuncu.y -= oyuncu.hiz;
+
+    if (tuslar["s"] || tuslar["arrowdown"])
+        oyuncu.y += oyuncu.hiz;
+
+    if (tuslar["a"] || tuslar["arrowleft"])
+        oyuncu.x -= oyuncu.hiz;
+
+    if (tuslar["d"] || tuslar["arrowright"])
+        oyuncu.x += oyuncu.hiz;
+
+    // Ekran sınırı
+    oyuncu.x = Math.max(0, Math.min(canvas.width - oyuncu.w, oyuncu.x));
+    oyuncu.y = Math.max(0, Math.min(canvas.height - oyuncu.h, oyuncu.y));
+
+    // Engellere çarpma
+    for (let e of engeller) {
+
+        if (dikdortgenCarpisma(oyuncu, e)) {
+            oyuncu.x = eskiX;
+            oyuncu.y = eskiY;
+        }
+    }
+}
+
+function dusmanHareket() {
+
+    for (let d of dusmanlar) {
+
+        let dx = oyuncu.x - d.x;
+        let dy = oyuncu.y - d.y;
+
+        let mesafe = Math.sqrt(dx * dx + dy * dy);
+
+        if (mesafe > 0) {
+            d.x += dx / mesafe * d.hiz;
+            d.y += dy / mesafe * d.hiz;
+        }
+    }
+}
+
+function dikdortgenCarpisma(a, b) {
+
+    return (
+        a.x < b.x + b.w &&
+        a.x + a.w > b.x &&
+        a.y < b.y + b.h &&
+        a.y + a.h > b.y
+    );
+}
+
+function dusmanCarpisma() {
+
+    for (let d of dusmanlar) {
+
+        let dx = oyuncu.x + oyuncu.w / 2 - d.x;
+        let dy = oyuncu.y + oyuncu.h / 2 - d.y;
+
+        let mesafe = Math.sqrt(dx * dx + dy * dy);
+
+        if (mesafe < d.r + oyuncu.w / 2) {
+
+            can--;
+
+            document.getElementById("can").textContent = can;
+
+            oyuncu.x = 60;
+            oyuncu.y = canvas.height / 2;
+
+            if (can <= 0) {
+                oyunBitti();
+            }
+        }
+    }
+}
+
+function puanKontrol() {
+
+    // Sağ tarafa ulaşınca bölüm geç
+    if (oyuncu.x > canvas.width - 60) {
+
+        puan += 100;
+
+        bolum++;
+
+        document.getElementById("puan").textContent = puan;
+
+        yeniBolum();
+    }
+}
+
+function ciz() {
+
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+    // Arka plan
+    ctx.fillStyle = "#151515";
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+    // Izgara
+    ctx.strokeStyle = "#252525";
+
+    for (let x = 0; x < canvas.width; x += 50) {
+
+        ctx.beginPath();
+        ctx.moveTo(x, 0);
+        ctx.lineTo(x, canvas.height);
+        ctx.stroke();
+    }
+
+    for (let y = 0; y < canvas.height; y += 50) {
+
+        ctx.beginPath();
+        ctx.moveTo(0, y);
+        ctx.lineTo(canvas.width, y);
+        ctx.stroke();
+    }
+
+    // Çıkış
+    ctx.fillStyle = "#00ff66";
+    ctx.fillRect(canvas.width - 35, 0, 35, canvas.height);
+
+    // Engeller
+    for (let e of engeller) {
+
+        ctx.fillStyle = "#555";
+        ctx.fillRect(e.x, e.y, e.w, e.h);
+
+        ctx.strokeStyle = "#aaa";
+        ctx.strokeRect(e.x, e.y, e.w, e.h);
+    }
+
+    // Düşmanlar
+    for (let d of dusmanlar) {
+
+        ctx.beginPath();
+        ctx.arc(d.x, d.y, d.r, 0, Math.PI * 2);
+
+        ctx.fillStyle = "#ff2222";
+        ctx.fill();
+
+        // Gözler
+        ctx.fillStyle = "white";
+
+        ctx.beginPath();
+        ctx.arc(d.x - 6, d.y - 4, 4, 0, Math.PI * 2);
+        ctx.arc(d.x + 6, d.y - 4, 4, 0, Math.PI * 2);
+        ctx.fill();
+    }
+
+    // Oyuncu
+    ctx.fillStyle = "#3399ff";
+    ctx.fillRect(
+        oyuncu.x,
+        oyuncu.y,
+        oyuncu.w,
+        oyuncu.h
+    );
+
+    ctx.strokeStyle = "white";
+    ctx.strokeRect(
+        oyuncu.x,
+        oyuncu.y,
+        oyuncu.w,
+        oyuncu.h
+    );
+}
+
+function oyunDongusu() {
+
+    if (!oyunAktif) return;
+
+    hareket();
+    dusmanHareket();
+    dusmanCarpisma();
+    puanKontrol();
+    ciz();
+
+    requestAnimationFrame(oyunDongusu);
+}
+
+function oyunBitti() {
+
+    oyunAktif = false;
+
+    document.getElementById("basla").style.display = "flex";
+
+    document.querySelector("#basla h1").textContent =
+        "💀 OYUN BİTTİ";
+
+    document.querySelector("#basla p").textContent =
+        "Skorun: " + puan + " | Ulaştığın bölüm: " + bolum;
+
+    document.querySelector("#basla button").textContent =
+        "TEKRAR DENE";
+}
+
+</script>
+
+<a href="index.html" aria-label="Ana sayfaya dön" title="Ana sayfa" style="position:fixed;right:16px;bottom:16px;z-index:2147483647;display:inline-flex;align-items:center;justify-content:center;min-height:44px;padding:0 16px;background:#d8f26a;color:#202820;border:2px solid #202820;border-radius:7px;font:700 14px Arial,sans-serif;text-decoration:none;box-shadow:3px 3px 0 #202820;">Ana sayfa</a>
+</body>
+</html>
+```
+
+**Ama dikkat:** Bu oyunda bölüm numarası yükseldikçe düşmanlar hızlanıyor ve sayıları artıyor. 😈
+**Bölüm 10'a ulaşabilirsen gerçekten iyi iş.** 🏆

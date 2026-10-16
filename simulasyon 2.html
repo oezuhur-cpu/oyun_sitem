@@ -1,0 +1,2025 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1.0">
+<title>Open World City Simulator</title>
+
+<style>
+*{
+    box-sizing:border-box;
+    margin:0;
+    padding:0;
+}
+
+html,body{
+    width:100%;
+    height:100%;
+    overflow:hidden;
+    background:#111;
+    font-family:Arial,sans-serif;
+}
+
+canvas{
+    display:block;
+}
+
+#hud{
+    position:fixed;
+    top:15px;
+    left:15px;
+    width:250px;
+    padding:14px;
+    color:white;
+    background:rgba(0,0,0,.78);
+    border-radius:14px;
+    z-index:10;
+    box-shadow:0 5px 25px #0008;
+}
+
+.logo{
+    font-size:21px;
+    font-weight:bold;
+    margin-bottom:10px;
+}
+
+.row{
+    margin:7px 0;
+    font-size:14px;
+}
+
+.bar{
+    width:100%;
+    height:8px;
+    background:#292929;
+    border-radius:5px;
+    overflow:hidden;
+    margin-top:3px;
+}
+
+.bar div{
+    height:100%;
+    width:100%;
+}
+
+.health{background:#e33}
+.fuel{background:#e7c331}
+.wanted{background:#eee}
+
+#mission{
+    position:fixed;
+    top:15px;
+    left:50%;
+    transform:translateX(-50%);
+    min-width:320px;
+    max-width:500px;
+    padding:15px 20px;
+    color:white;
+    background:rgba(10,10,10,.88);
+    border:1px solid #ffffff33;
+    border-radius:14px;
+    text-align:center;
+    z-index:10;
+}
+
+#missionTitle{
+    font-weight:bold;
+    font-size:17px;
+    margin-bottom:6px;
+}
+
+#missionText{
+    font-size:13px;
+    line-height:1.4;
+}
+
+#weather{
+    position:fixed;
+    top:15px;
+    right:15px;
+    background:#000b;
+    color:white;
+    padding:12px 16px;
+    border-radius:12px;
+    z-index:10;
+}
+
+#controls{
+    position:fixed;
+    bottom:15px;
+    left:15px;
+    background:#000b;
+    color:white;
+    padding:12px 15px;
+    border-radius:12px;
+    z-index:10;
+    font-size:13px;
+    line-height:1.6;
+}
+
+#message{
+    position:fixed;
+    bottom:80px;
+    left:50%;
+    transform:translateX(-50%);
+    color:white;
+    background:#000d;
+    padding:12px 22px;
+    border-radius:10px;
+    opacity:0;
+    transition:.25s;
+    z-index:20;
+}
+
+#map{
+    position:fixed;
+    right:15px;
+    bottom:15px;
+    width:190px;
+    height:190px;
+    border:2px solid #fff8;
+    background:#222;
+    z-index:10;
+    border-radius:12px;
+}
+</style>
+</head>
+
+<body>
+
+<canvas id="game"></canvas>
+
+<div id="hud">
+    <div class="logo">🏙️ OPEN CITY</div>
+
+    <div class="row">
+        ❤️ Sağlık
+        <div class="bar">
+            <div id="health" class="health"></div>
+        </div>
+    </div>
+
+    <div class="row">
+        ⛽ Yakıt
+        <div class="bar">
+            <div id="fuel" class="fuel"></div>
+        </div>
+    </div>
+
+    <div class="row">
+        ⭐ Aranma
+        <div class="bar">
+            <div id="wanted" class="wanted"></div>
+        </div>
+    </div>
+
+    <div class="row">💰 Para: <b id="money">2500</b> ₺</div>
+    <div class="row">🕒 Saat: <b id="clock">08:00</b></div>
+    <div class="row">🚗 Araç: <b id="vehicle">Yaya</b></div>
+</div>
+
+<div id="mission">
+    <div id="missionTitle">📋 GÖREV</div>
+    <div id="missionText">Görev almak için sarı bölgeye git.</div>
+</div>
+
+<div id="weather">☀️ Açık</div>
+
+<div id="controls">
+    <b>WASD</b> / Oklar: Hareket<br>
+    <b>SHIFT</b>: Hızlan<br>
+    <b>E</b>: Araca bin / in<br>
+    <b>R</b>: Benzin al<br>
+    <b>M</b>: Haritayı aç/kapat
+</div>
+
+<canvas id="map"></canvas>
+
+<div id="message"></div>
+
+<script>
+"use strict";
+
+/* =========================================================
+   CANVAS
+========================================================= */
+
+const canvas=document.getElementById("game");
+const ctx=canvas.getContext("2d");
+
+const minimap=document.getElementById("map");
+const mctx=minimap.getContext("2d");
+
+function resize(){
+    canvas.width=innerWidth;
+    canvas.height=innerHeight;
+}
+
+resize();
+addEventListener("resize",resize);
+
+/* =========================================================
+   WORLD
+========================================================= */
+
+const WORLD_W=9000;
+const WORLD_H=9000;
+
+const keys={};
+
+addEventListener("keydown",e=>{
+
+    keys[e.key.toLowerCase()]=true;
+
+    if(
+        ["w","a","s","d",
+         "arrowup","arrowdown",
+         "arrowleft","arrowright",
+         "shift","e","r","m"].includes(e.key.toLowerCase())
+    ){
+        e.preventDefault();
+    }
+
+    if(e.key.toLowerCase()==="e"){
+        toggleVehicle();
+    }
+
+    if(e.key.toLowerCase()==="r"){
+        refuel();
+    }
+
+    if(e.key.toLowerCase()==="m"){
+        minimap.style.display=
+            minimap.style.display==="none"
+            ?"block"
+            :"none";
+    }
+});
+
+addEventListener("keyup",e=>{
+    keys[e.key.toLowerCase()]=false;
+});
+
+/* =========================================================
+   CAMERA
+========================================================= */
+
+const camera={
+    x:4500,
+    y:4500
+};
+
+/* =========================================================
+   PLAYER
+========================================================= */
+
+const player={
+    x:4500,
+    y:4500,
+    radius:14,
+
+    health:100,
+    fuel:100,
+    money:2500,
+
+    vehicle:null,
+    wanted:0
+};
+
+/* =========================================================
+   TIME
+========================================================= */
+
+let minutes=8*60;
+
+function updateTime(dt){
+
+    minutes+=dt*0.45;
+
+    if(minutes>=1440)
+        minutes-=1440;
+
+    const h=Math.floor(minutes/60);
+    const m=Math.floor(minutes%60);
+
+    document.getElementById("clock").textContent=
+        String(h).padStart(2,"0")+":"+
+        String(m).padStart(2,"0");
+}
+
+/* =========================================================
+   WEATHER
+========================================================= */
+
+const weathers=[
+    {name:"☀️ Açık",rain:false},
+    {name:"☁️ Bulutlu",rain:false},
+    {name:"🌧️ Yağmurlu",rain:true},
+    {name:"🌫️ Sisli",rain:false}
+];
+
+let weather=weathers[0];
+let weatherTimer=40;
+
+function updateWeather(dt){
+
+    weatherTimer-=dt;
+
+    if(weatherTimer<=0){
+
+        weather=
+            weathers[
+                Math.floor(
+                    Math.random()*weathers.length
+                )
+            ];
+
+        weatherTimer=35+Math.random()*50;
+
+        document.getElementById("weather").textContent=
+            weather.name;
+    }
+}
+
+/* =========================================================
+   CITY DISTRICTS
+========================================================= */
+
+const districts=[
+    {
+        name:"Downtown",
+        x:3000,
+        y:3000,
+        w:3000,
+        h:2500,
+        color:"#777"
+    },
+    {
+        name:"Banliyö",
+        x:500,
+        y:500,
+        w:2300,
+        h:2200,
+        color:"#70a55e"
+    },
+    {
+        name:"Sanayi",
+        x:5800,
+        y:500,
+        w:2800,
+        h:2300,
+        color:"#7c795f"
+    },
+    {
+        name:"Sahil",
+        x:3000,
+        y:5700,
+        w:5000,
+        h:2600,
+        color:"#d4c27d"
+    },
+    {
+        name:"Eski Şehir",
+        x:500,
+        y:5800,
+        w:2300,
+        h:2500,
+        color:"#82796d"
+    }
+];
+
+/* =========================================================
+   ROADS
+========================================================= */
+
+const roads=[];
+
+for(let x=700;x<WORLD_W;x+=800){
+
+    roads.push({
+        x:x-60,
+        y:0,
+        w:120,
+        h:WORLD_H,
+        vertical:true
+    });
+
+}
+
+for(let y=700;y<WORLD_H;y+=800){
+
+    roads.push({
+        x:0,
+        y:y-60,
+        w:WORLD_W,
+        h:120,
+        vertical:false
+    });
+
+}
+
+/* Ana otoyollar */
+
+roads.push({
+    x:4300,
+    y:0,
+    w:220,
+    h:WORLD_H,
+    vertical:true
+});
+
+roads.push({
+    x:0,
+    y:4300,
+    w:WORLD_W,
+    h:220,
+    vertical:false
+});
+
+/* =========================================================
+   BUILDINGS
+========================================================= */
+
+const buildings=[];
+
+function nearRoad(x,y,w,h){
+
+    for(const r of roads){
+
+        if(
+            x<r.x+r.w+15 &&
+            x+w>r.x-15 &&
+            y<r.y+r.h+15 &&
+            y+h>r.y-15
+        )
+            return true;
+    }
+
+    return false;
+}
+
+for(let x=100;x<WORLD_W-100;x+=190){
+
+    for(let y=100;y<WORLD_H-100;y+=190){
+
+        if(nearRoad(x,y,145,145))
+            continue;
+
+        if(Math.random()<0.72){
+
+            const downtown=
+                x>3000&&
+                x<6000&&
+                y>2500&&
+                y<5700;
+
+            buildings.push({
+                x:x+Math.random()*20,
+                y:y+Math.random()*20,
+                w:100+Math.random()*60,
+                h:100+Math.random()*70,
+                floors:downtown?
+                    3+Math.floor(Math.random()*12):
+                    1+Math.floor(Math.random()*5),
+                color:[
+                    "#777c82",
+                    "#93877a",
+                    "#a89b86",
+                    "#676e75",
+                    "#8c796c",
+                    "#555c62"
+                ][Math.floor(Math.random()*6)]
+            });
+        }
+    }
+}
+
+/* =========================================================
+   TREES
+========================================================= */
+
+const trees=[];
+
+for(let i=0;i<850;i++){
+
+    trees.push({
+        x:Math.random()*WORLD_W,
+        y:Math.random()*WORLD_H,
+        r:7+Math.random()*12
+    });
+}
+
+/* =========================================================
+   CARS
+========================================================= */
+
+const cars=[];
+
+const colors=[
+    "#d72c2c",
+    "#286bd1",
+    "#e2b928",
+    "#eeeeee",
+    "#171717",
+    "#792fc4",
+    "#268f50",
+    "#777"
+];
+
+function spawnCar(lambo=false){
+
+    const vertical=Math.random()<.5;
+
+    let x,y;
+
+    if(vertical){
+
+        x=
+            Math.floor(
+                (Math.random()*WORLD_W)/800
+            )*800;
+
+        y=Math.random()*WORLD_H;
+
+    }else{
+
+        y=
+            Math.floor(
+                (Math.random()*WORLD_H)/800
+            )*800;
+
+        x=Math.random()*WORLD_W;
+    }
+
+    cars.push({
+
+        x,
+        y,
+
+        vertical,
+
+        speed:
+            lambo?
+            4.5:
+            1.2+Math.random()*1.8,
+
+        color:
+            lambo?
+            "#ffcc00":
+            colors[
+                Math.floor(Math.random()*colors.length)
+            ],
+
+        lambo,
+
+        occupied:false
+    });
+}
+
+/* Normal traffic */
+
+for(let i=0;i<110;i++)
+    spawnCar(false);
+
+/* Lamborghini */
+
+spawnCar(true);
+
+/* More special cars */
+
+const specialCars=[];
+
+function spawnPlayerLambo(){
+
+    const lambo={
+        x:4550,
+        y:4500,
+        vertical:false,
+        speed:6,
+        color:"#ffcc00",
+        lambo:true,
+        occupied:false,
+        playerCar:true
+    };
+
+    cars.push(lambo);
+
+    return lambo;
+}
+
+const playerLambo=spawnPlayerLambo();
+
+/* =========================================================
+   PEOPLE
+========================================================= */
+
+const people=[];
+
+for(let i=0;i<250;i++){
+
+    people.push({
+        x:Math.random()*WORLD_W,
+        y:Math.random()*WORLD_H,
+        vx:0,
+        vy:0,
+        timer:0,
+        speed:.25+Math.random()*.55,
+        color:[
+            "#e9b28d",
+            "#b87955",
+            "#764b38",
+            "#d39772"
+        ][Math.floor(Math.random()*4)]
+    });
+}
+
+/* =========================================================
+   POLICE
+========================================================= */
+
+const police=[];
+
+function spawnPolice(){
+
+    police.push({
+        x:player.x+500,
+        y:player.y+500,
+        speed:2.3
+    });
+}
+
+/* =========================================================
+   MISSIONS
+========================================================= */
+
+const missionPoints=[
+    {
+        x:1200,
+        y:1200,
+        name:"Banliyö",
+        reward:600
+    },
+    {
+        x:4500,
+        y:1500,
+        name:"Sanayi",
+        reward:900
+    },
+    {
+        x:7300,
+        y:6500,
+        name:"Sahil",
+        reward:1200
+    },
+    {
+        x:1500,
+        y:7200,
+        name:"Eski Şehir",
+        reward:1500
+    },
+    {
+        x:7200,
+        y:1800,
+        name:"Liman",
+        reward:2000
+    }
+];
+
+let currentMission=0;
+
+function setMission(){
+
+    const m=missionPoints[currentMission];
+
+    document.getElementById("missionText").textContent=
+        `${m.name} bölgesindeki sarı noktaya git. `+
+        `Ödül: ${m.reward} ₺`;
+}
+
+setMission();
+
+/* =========================================================
+   COLLISION
+========================================================= */
+
+function circleRect(cx,cy,r,b){
+
+    const nx=Math.max(
+        b.x,
+        Math.min(cx,b.x+b.w)
+    );
+
+    const ny=Math.max(
+        b.y,
+        Math.min(cy,b.y+b.h)
+    );
+
+    const dx=cx-nx;
+    const dy=cy-ny;
+
+    return dx*dx+dy*dy<r*r;
+}
+
+function blocked(x,y,r){
+
+    for(const b of buildings){
+
+        if(circleRect(x,y,r,b))
+            return true;
+    }
+
+    return false;
+}
+
+/* =========================================================
+   VEHICLE
+========================================================= */
+
+function nearestCar(){
+
+    let best=null;
+    let distance=Infinity;
+
+    for(const car of cars){
+
+        if(car.occupied)
+            continue;
+
+        const d=Math.hypot(
+            car.x-player.x,
+            car.y-player.y
+        );
+
+        if(d<distance){
+
+            distance=d;
+            best=car;
+        }
+    }
+
+    return distance<70?best:null;
+}
+
+function toggleVehicle(){
+
+    if(player.vehicle){
+
+        player.x=
+            player.vehicle.x+50;
+
+        player.y=
+            player.vehicle.y;
+
+        player.vehicle.occupied=false;
+
+        const wasLambo=
+            player.vehicle.lambo;
+
+        player.vehicle=null;
+
+        document.getElementById("vehicle").textContent=
+            "Yaya";
+
+        showMessage(
+            wasLambo?
+            "🏎️ Lamborghini'den indin.":
+            "Araçtan indin."
+        );
+
+        return;
+    }
+
+    const car=nearestCar();
+
+    if(!car){
+
+        showMessage("Yakında araç yok.");
+        return;
+    }
+
+    player.vehicle=car;
+    car.occupied=true;
+
+    document.getElementById("vehicle").textContent=
+        car.lambo?
+        "🏎️ Lamborghini":
+        "🚗 Araç";
+
+    showMessage(
+        car.lambo?
+        "🏎️ Lamborghini'ye bindin!":
+        "Araca bindin."
+    );
+}
+
+/* =========================================================
+   MOVEMENT
+========================================================= */
+
+function movePlayer(dt){
+
+    if(player.vehicle){
+
+        drive(dt);
+        return;
+    }
+
+    let dx=0;
+    let dy=0;
+
+    if(keys.w||keys.arrowup)dy--;
+    if(keys.s||keys.arrowdown)dy++;
+    if(keys.a||keys.arrowleft)dx--;
+    if(keys.d||keys.arrowright)dx++;
+
+    if(dx===0&&dy===0)
+        return;
+
+    const len=Math.hypot(dx,dy);
+
+    dx/=len;
+    dy/=len;
+
+    let speed=2.7;
+
+    if(keys.shift)
+        speed=4.4;
+
+    const nx=player.x+dx*speed*dt*60;
+    const ny=player.y+dy*speed*dt*60;
+
+    if(!blocked(nx,player.y,14))
+        player.x=nx;
+
+    if(!blocked(player.x,ny,14))
+        player.y=ny;
+
+    clampPlayer();
+}
+
+function drive(dt){
+
+    const car=player.vehicle;
+
+    let dx=0;
+    let dy=0;
+
+    if(keys.w||keys.arrowup)dy--;
+    if(keys.s||keys.arrowdown)dy++;
+    if(keys.a||keys.arrowleft)dx--;
+    if(keys.d||keys.arrowright)dx++;
+
+    if(dx===0&&dy===0)
+        return;
+
+    const len=Math.hypot(dx,dy);
+
+    dx/=len;
+    dy/=len;
+
+    let speed=
+        car.lambo?
+        6:
+        3.5;
+
+    if(keys.shift)
+        speed*=1.35;
+
+    if(player.fuel<=0){
+
+        showMessage("⛽ Benzin bitti!");
+        return;
+    }
+
+    const nx=car.x+dx*speed*dt*60;
+    const ny=car.y+dy*speed*dt*60;
+
+    if(
+        nx>20 &&
+        nx<WORLD_W-20 &&
+        ny>20 &&
+        ny<WORLD_H-20 &&
+        !blocked(nx,ny,22)
+    ){
+
+        car.x=nx;
+        car.y=ny;
+
+        player.fuel-=
+            (car.lambo?.16:.08)*
+            speed*dt;
+
+    }
+
+    player.x=car.x;
+    player.y=car.y;
+
+    clampPlayer();
+}
+
+function clampPlayer(){
+
+    player.x=Math.max(
+        20,
+        Math.min(WORLD_W-20,player.x)
+    );
+
+    player.y=Math.max(
+        20,
+        Math.min(WORLD_H-20,player.y)
+    );
+}
+
+/* =========================================================
+   PEOPLE AI
+========================================================= */
+
+function updatePeople(dt){
+
+    for(const p of people){
+
+        p.timer-=dt;
+
+        if(p.timer<=0){
+
+            const a=Math.random()*Math.PI*2;
+
+            p.vx=Math.cos(a)*p.speed;
+            p.vy=Math.sin(a)*p.speed;
+
+            p.timer=1+Math.random()*4;
+        }
+
+        const nx=p.x+p.vx*dt*60;
+        const ny=p.y+p.vy*dt*60;
+
+        if(!blocked(nx,ny,5)){
+
+            p.x=nx;
+            p.y=ny;
+
+        }else{
+
+            p.timer=0;
+        }
+    }
+}
+
+/* =========================================================
+   TRAFFIC
+========================================================= */
+
+function updateCars(dt){
+
+    for(const car of cars){
+
+        if(car.occupied)
+            continue;
+
+        if(car.playerCar)
+            continue;
+
+        if(car.vertical){
+
+            car.y+=car.speed*dt*60;
+
+            if(car.y>WORLD_H+100)
+                car.y=-100;
+
+        }else{
+
+            car.x+=car.speed*dt*60;
+
+            if(car.x>WORLD_W+100)
+                car.x=-100;
+        }
+    }
+}
+
+/* =========================================================
+   POLICE AI
+========================================================= */
+
+function updatePolice(dt){
+
+    if(player.wanted<=0){
+
+        police.length=0;
+        return;
+    }
+
+    if(police.length<Math.ceil(player.wanted))
+        spawnPolice();
+
+    for(const p of police){
+
+        const dx=player.x-p.x;
+        const dy=player.y-p.y;
+
+        const len=Math.max(
+            1,
+            Math.hypot(dx,dy)
+        );
+
+        p.x+=dx/len*p.speed*dt*60;
+        p.y+=dy/len*p.speed*dt*60;
+
+        if(
+            Math.hypot(
+                p.x-player.x,
+                p.y-player.y
+            )<35
+        ){
+
+            player.health-=
+                .08*dt*60;
+        }
+    }
+}
+
+/* =========================================================
+   MISSION SYSTEM
+========================================================= */
+
+function updateMission(){
+
+    const m=missionPoints[currentMission];
+
+    const distance=Math.hypot(
+        player.x-m.x,
+        player.y-m.y
+    );
+
+    if(distance<130){
+
+        player.money+=m.reward;
+
+        showMessage(
+            `✅ Görev tamamlandı! +${m.reward} ₺`
+        );
+
+        currentMission++;
+
+        if(currentMission>=missionPoints.length){
+
+            currentMission=0;
+
+            document.getElementById("missionText").textContent=
+                "🎉 Şehirdeki tüm görevleri tamamladın! Yeni görevler yeniden başladı.";
+
+        }else{
+
+            setMission();
+        }
+    }
+}
+
+/* =========================================================
+   WANTED
+========================================================= */
+
+function updateWanted(dt){
+
+    if(player.wanted>0){
+
+        if(Math.random()<dt*.02){
+
+            player.wanted=
+                Math.max(
+                    0,
+                    player.wanted-.05
+                );
+        }
+    }
+}
+
+/* =========================================================
+   FUEL
+========================================================= */
+
+function refuel(){
+
+    if(!player.vehicle){
+
+        showMessage("Önce araca bin.");
+        return;
+    }
+
+    if(player.money<150){
+
+        showMessage(
+            "⛽ Benzin için 150 ₺ gerekiyor."
+        );
+
+        return;
+    }
+
+    player.money-=150;
+    player.fuel=100;
+
+    showMessage("⛽ Lamborghini deposu dolduruldu.");
+}
+
+/* =========================================================
+   PLAYER / CAR COLLISION
+========================================================= */
+
+function collisionCheck(){
+
+    if(player.vehicle)
+        return;
+
+    for(const car of cars){
+
+        const d=Math.hypot(
+            car.x-player.x,
+            car.y-player.y
+        );
+
+        if(d<25){
+
+            player.health-=.2;
+
+            player.wanted=
+                Math.min(
+                    5,
+                    player.wanted+.001
+                );
+        }
+    }
+}
+
+/* =========================================================
+   DRAW CITY
+========================================================= */
+
+function drawCity(){
+
+    ctx.fillStyle="#69a95d";
+
+    ctx.fillRect(
+        0,
+        0,
+        canvas.width,
+        canvas.height
+    );
+
+    ctx.save();
+
+    ctx.translate(
+        -camera.x,
+        -camera.y
+    );
+
+    /* Districts */
+
+    for(const d of districts){
+
+        ctx.fillStyle=d.color;
+
+        ctx.globalAlpha=.13;
+
+        ctx.fillRect(
+            d.x,
+            d.y,
+            d.w,
+            d.h
+        );
+
+        ctx.globalAlpha=1;
+
+        ctx.fillStyle="#ffffff35";
+
+        ctx.font="bold 42px Arial";
+
+        ctx.fillText(
+            d.name,
+            d.x+60,
+            d.y+70
+        );
+    }
+
+    /* Roads */
+
+    for(const r of roads){
+
+        ctx.fillStyle="#393d40";
+
+        ctx.fillRect(
+            r.x,
+            r.y,
+            r.w,
+            r.h
+        );
+
+        ctx.strokeStyle="#777";
+
+        ctx.lineWidth=2;
+
+        if(r.vertical){
+
+            for(
+                let y=r.y;
+                y<r.y+r.h;
+                y+=45
+            ){
+
+                ctx.beginPath();
+
+                ctx.moveTo(
+                    r.x+r.w/2,
+                    y
+                );
+
+                ctx.lineTo(
+                    r.x+r.w/2,
+                    y+23
+                );
+
+                ctx.stroke();
+            }
+
+        }else{
+
+            for(
+                let x=r.x;
+                x<r.x+r.w;
+                x+=45
+            ){
+
+                ctx.beginPath();
+
+                ctx.moveTo(
+                    x,
+                    r.y+r.h/2
+                );
+
+                ctx.lineTo(
+                    x+23,
+                    r.y+r.h/2
+                );
+
+                ctx.stroke();
+            }
+        }
+    }
+
+    /* Trees */
+
+    for(const t of trees){
+
+        ctx.fillStyle="#543b22";
+
+        ctx.fillRect(
+            t.x-2,
+            t.y,
+            4,
+            t.r
+        );
+
+        ctx.fillStyle="#267334";
+
+        ctx.beginPath();
+
+        ctx.arc(
+            t.x,
+            t.y,
+            t.r,
+            0,
+            Math.PI*2
+        );
+
+        ctx.fill();
+    }
+
+    /* Buildings */
+
+    for(const b of buildings){
+
+        ctx.fillStyle="#0005";
+
+        ctx.fillRect(
+            b.x+9,
+            b.y+10,
+            b.w,
+            b.h
+        );
+
+        ctx.fillStyle=b.color;
+
+        ctx.fillRect(
+            b.x,
+            b.y,
+            b.w,
+            b.h
+        );
+
+        ctx.fillStyle="#3c3c3c";
+
+        ctx.fillRect(
+            b.x,
+            b.y,
+            b.w,
+            9
+        );
+
+        /* windows */
+
+        ctx.fillStyle=
+            b.floors>6?
+            "#bcd8e8":
+            "#d8d2a3";
+
+        for(
+            let wx=b.x+12;
+            wx<b.x+b.w-10;
+            wx+=25
+        ){
+
+            for(
+                let wy=b.y+20;
+                wy<b.y+b.h-10;
+                wy+=25
+            ){
+
+                ctx.fillRect(
+                    wx,
+                    wy,
+                    9,
+                    11
+                );
+            }
+        }
+    }
+
+    /* Mission */
+
+    const mission=missionPoints[currentMission];
+
+    ctx.fillStyle="#ffd21f";
+
+    ctx.beginPath();
+
+    ctx.arc(
+        mission.x,
+        mission.y,
+        30+Math.sin(Date.now()/200)*5,
+        0,
+        Math.PI*2
+    );
+
+    ctx.fill();
+
+    ctx.fillStyle="#000";
+
+    ctx.font="bold 18px Arial";
+
+    ctx.textAlign="center";
+
+    ctx.fillText(
+        "!",
+        mission.x,
+        mission.y+7
+    );
+
+    ctx.textAlign="left";
+
+    /* People */
+
+    for(const p of people){
+
+        ctx.fillStyle="#0004";
+
+        ctx.beginPath();
+
+        ctx.ellipse(
+            p.x,
+            p.y+7,
+            5,
+            3,
+            0,
+            0,
+            Math.PI*2
+        );
+
+        ctx.fill();
+
+        ctx.fillStyle="#3169a5";
+
+        ctx.fillRect(
+            p.x-4,
+            p.y,
+            8,
+            10
+        );
+
+        ctx.fillStyle=p.color;
+
+        ctx.beginPath();
+
+        ctx.arc(
+            p.x,
+            p.y-4,
+            5,
+            0,
+            Math.PI*2
+        );
+
+        ctx.fill();
+    }
+
+    /* Cars */
+
+    for(const car of cars){
+
+        drawCar(car);
+    }
+
+    /* Police */
+
+    for(const p of police){
+
+        ctx.fillStyle="#222";
+
+        ctx.fillRect(
+            p.x-14,
+            p.y-9,
+            28,
+            18
+        );
+
+        ctx.fillStyle="#1d5fd1";
+
+        ctx.fillRect(
+            p.x-13,
+            p.y-8,
+            12,
+            16
+        );
+
+        ctx.fillStyle="#e22";
+
+        ctx.fillRect(
+            p.x+1,
+            p.y-8,
+            12,
+            16
+        );
+    }
+
+    /* Player */
+
+    if(!player.vehicle){
+
+        ctx.fillStyle="#0004";
+
+        ctx.beginPath();
+
+        ctx.ellipse(
+            player.x,
+            player.y+12,
+            9,
+            4,
+            0,
+            0,
+            Math.PI*2
+        );
+
+        ctx.fill();
+
+        ctx.fillStyle="#1674d1";
+
+        ctx.beginPath();
+
+        ctx.arc(
+            player.x,
+            player.y,
+            14,
+            0,
+            Math.PI*2
+        );
+
+        ctx.fill();
+
+        ctx.fillStyle="#fff";
+
+        ctx.beginPath();
+
+        ctx.arc(
+            player.x-5,
+            player.y-3,
+            3,
+            0,
+            Math.PI*2
+        );
+
+        ctx.arc(
+            player.x+5,
+            player.y-3,
+            3,
+            0,
+            Math.PI*2
+        );
+
+        ctx.fill();
+    }
+
+    ctx.restore();
+}
+
+/* =========================================================
+   CAR RENDERING
+========================================================= */
+
+function drawCar(car){
+
+    ctx.save();
+
+    ctx.translate(
+        car.x,
+        car.y
+    );
+
+    if(car.vertical)
+        ctx.rotate(Math.PI/2);
+
+    if(car.lambo){
+
+        /* shadow */
+
+        ctx.fillStyle="#0006";
+
+        ctx.beginPath();
+
+        ctx.ellipse(
+            0,
+            8,
+            28,
+            10,
+            0,
+            0,
+            Math.PI*2
+        );
+
+        ctx.fill();
+
+        /* body */
+
+        ctx.fillStyle="#ffcc00";
+
+        ctx.beginPath();
+
+        ctx.moveTo(-29,-9);
+        ctx.lineTo(-18,-15);
+        ctx.lineTo(12,-15);
+        ctx.lineTo(29,-7);
+        ctx.lineTo(25,10);
+        ctx.lineTo(-24,10);
+        ctx.closePath();
+
+        ctx.fill();
+
+        /* black roof */
+
+        ctx.fillStyle="#111";
+
+        ctx.beginPath();
+
+        ctx.moveTo(-10,-13);
+        ctx.lineTo(10,-13);
+        ctx.lineTo(18,-7);
+        ctx.lineTo(-15,-7);
+        ctx.closePath();
+
+        ctx.fill();
+
+        /* windshield */
+
+        ctx.fillStyle="#6d8790";
+
+        ctx.beginPath();
+
+        ctx.moveTo(-7,-12);
+        ctx.lineTo(8,-12);
+        ctx.lineTo(13,-7);
+        ctx.lineTo(-11,-7);
+        ctx.closePath();
+
+        ctx.fill();
+
+        /* headlights */
+
+        ctx.fillStyle="#fff";
+
+        ctx.fillRect(
+            22,
+            -6,
+            6,
+            4
+        );
+
+        ctx.fillRect(
+            22,
+            2,
+            6,
+            4
+        );
+
+        /* wheels */
+
+        ctx.fillStyle="#111";
+
+        ctx.fillRect(
+            -18,
+            -14,
+            10,
+            5
+        );
+
+        ctx.fillRect(
+            10,
+            -14,
+            10,
+            5
+        );
+
+        ctx.fillRect(
+            -18,
+            9,
+            10,
+            5
+        );
+
+        ctx.fillRect(
+            10,
+            9,
+            10,
+            5
+        );
+
+    }else{
+
+        ctx.fillStyle="#0005";
+
+        ctx.fillRect(
+            -19,
+            -7,
+            40,
+            20
+        );
+
+        ctx.fillStyle=car.color;
+
+        ctx.fillRect(
+            -18,
+            -9,
+            36,
+            18
+        );
+
+        ctx.fillStyle="#26343b";
+
+        ctx.fillRect(
+            -8,
+            -7,
+            17,
+            14
+        );
+
+        ctx.fillStyle="#eee";
+
+        ctx.fillRect(
+            13,
+            -6,
+            4,
+            4
+        );
+
+        ctx.fillRect(
+            13,
+            2,
+            4,
+            4
+        );
+    }
+
+    ctx.restore();
+}
+
+/* =========================================================
+   CAMERA
+========================================================= */
+
+function updateCamera(){
+
+    camera.x=
+        player.x-
+        canvas.width/2;
+
+    camera.y=
+        player.y-
+        canvas.height/2;
+
+    camera.x=Math.max(
+        0,
+        Math.min(
+            WORLD_W-canvas.width,
+            camera.x
+        )
+    );
+
+    camera.y=Math.max(
+        0,
+        Math.min(
+            WORLD_H-canvas.height,
+            camera.y
+        )
+    );
+}
+
+/* =========================================================
+   DAY / NIGHT
+========================================================= */
+
+function drawLighting(){
+
+    const h=minutes/60;
+
+    let darkness=0;
+
+    if(h<5)
+        darkness=.65;
+
+    else if(h<7)
+        darkness=.65*(7-h)/2;
+
+    else if(h>19&&h<22)
+        darkness=.55*(h-19)/3;
+
+    else if(h>=22)
+        darkness=.65;
+
+    if(darkness>0){
+
+        ctx.fillStyle=
+            `rgba(7,12,35,${darkness})`;
+
+        ctx.fillRect(
+            0,
+            0,
+            canvas.width,
+            canvas.height
+        );
+    }
+}
+
+/* =========================================================
+   RAIN
+========================================================= */
+
+function drawRain(){
+
+    if(!weather.rain)
+        return;
+
+    ctx.strokeStyle="#a9c8ff88";
+
+    ctx.lineWidth=1;
+
+    for(let i=0;i<400;i++){
+
+        const x=Math.random()*canvas.width;
+        const y=Math.random()*canvas.height;
+
+        ctx.beginPath();
+
+        ctx.moveTo(x,y);
+
+        ctx.lineTo(
+            x-4,
+            y+15
+        );
+
+        ctx.stroke();
+    }
+}
+
+/* =========================================================
+   MINIMAP
+========================================================= */
+
+function drawMiniMap(){
+
+    const w=minimap.width;
+    const h=minimap.height;
+
+    mctx.fillStyle="#477d42";
+
+    mctx.fillRect(0,0,w,h);
+
+    const sx=w/WORLD_W;
+    const sy=h/WORLD_H;
+
+    /* roads */
+
+    mctx.fillStyle="#444";
+
+    for(const r of roads){
+
+        mctx.fillRect(
+            r.x*sx,
+            r.y*sy,
+            r.w*sx,
+            r.h*sy
+        );
+    }
+
+    /* buildings */
+
+    mctx.fillStyle="#777";
+
+    for(
+        let i=0;
+        i<buildings.length;
+        i+=4
+    ){
+
+        const b=buildings[i];
+
+        mctx.fillRect(
+            b.x*sx,
+            b.y*sy,
+            b.w*sx,
+            b.h*sy
+        );
+    }
+
+    /* mission */
+
+    const m=missionPoints[currentMission];
+
+    mctx.fillStyle="#ffd000";
+
+    mctx.beginPath();
+
+    mctx.arc(
+        m.x*sx,
+        m.y*sy,
+        4,
+        0,
+        Math.PI*2
+    );
+
+    mctx.fill();
+
+    /* player */
+
+    mctx.fillStyle="#00aaff";
+
+    mctx.beginPath();
+
+    mctx.arc(
+        player.x*sx,
+        player.y*sy,
+        4,
+        0,
+        Math.PI*2
+    );
+
+    mctx.fill();
+}
+
+/* =========================================================
+   UI
+========================================================= */
+
+function updateUI(){
+
+    document.getElementById("health").style.width=
+        Math.max(0,player.health)+"%";
+
+    document.getElementById("fuel").style.width=
+        Math.max(0,player.fuel)+"%";
+
+    document.getElementById("wanted").style.width=
+        (player.wanted/5*100)+"%";
+
+    document.getElementById("money").textContent=
+        Math.floor(player.money);
+}
+
+/* =========================================================
+   MESSAGE
+========================================================= */
+
+let messageTimer=null;
+
+function showMessage(text){
+
+    const el=document.getElementById("message");
+
+    el.textContent=text;
+
+    el.style.opacity="1";
+
+    clearTimeout(messageTimer);
+
+    messageTimer=setTimeout(()=>{
+
+        el.style.opacity="0";
+
+    },2200);
+}
+
+/* =========================================================
+   GAME OVER
+========================================================= */
+
+function gameOver(){
+
+    ctx.fillStyle="#000c";
+
+    ctx.fillRect(
+        0,
+        0,
+        canvas.width,
+        canvas.height
+    );
+
+    ctx.fillStyle="#fff";
+
+    ctx.textAlign="center";
+
+    ctx.font="bold 55px Arial";
+
+    ctx.fillText(
+        "OYUN BİTTİ",
+        canvas.width/2,
+        canvas.height/2
+    );
+
+    ctx.font="20px Arial";
+
+    ctx.fillText(
+        "Sayfayı yenileyerek tekrar başlayabilirsin.",
+        canvas.width/2,
+        canvas.height/2+45
+    );
+
+    ctx.textAlign="left";
+}
+
+/* =========================================================
+   MAIN LOOP
+========================================================= */
+
+let last=performance.now();
+let dead=false;
+
+function loop(now){
+
+    const dt=Math.min(
+        .05,
+        (now-last)/1000
+    );
+
+    last=now;
+
+    if(!dead){
+
+        updateTime(dt);
+        updateWeather(dt);
+
+        movePlayer(dt);
+        updatePeople(dt);
+        updateCars(dt);
+        updatePolice(dt);
+
+        collisionCheck();
+        updateWanted(dt);
+        updateMission();
+
+        updateCamera();
+        updateUI();
+
+        drawCity();
+        drawLighting();
+        drawRain();
+        drawMiniMap();
+
+        if(player.health<=0){
+
+            dead=true;
+            gameOver();
+        }
+    }
+
+    requestAnimationFrame(loop);
+}
+
+requestAnimationFrame(loop);
+
+</script>
+<a href="index.html" aria-label="Ana sayfaya dön" title="Ana sayfa" style="position:fixed;right:16px;bottom:16px;z-index:2147483647;display:inline-flex;align-items:center;justify-content:center;min-height:44px;padding:0 16px;background:#d8f26a;color:#202820;border:2px solid #202820;border-radius:7px;font:700 14px Arial,sans-serif;text-decoration:none;box-shadow:3px 3px 0 #202820;">Ana sayfa</a>
+</body>
+</html>

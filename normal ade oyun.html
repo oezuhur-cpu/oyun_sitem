@@ -1,0 +1,143 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+<meta charset="UTF-8">
+<title>Basit Oyun</title>
+
+<style>
+    body {
+        margin: 0;
+        background: #222;
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        height: 100vh;
+        font-family: Arial;
+    }
+
+    canvas {
+        background: #5dbb63;
+        border: 4px solid white;
+    }
+</style>
+</head>
+
+<body>
+
+<canvas id="oyun" width="800" height="500"></canvas>
+
+<script>
+const canvas = document.getElementById("oyun");
+const ctx = canvas.getContext("2d");
+
+let oyuncu = {
+    x: 380,
+    y: 230,
+    boyut: 35,
+    hiz: 5
+};
+
+let para = {
+    x: 150,
+    y: 150,
+    boyut: 22
+};
+
+let skor = 0;
+
+let tuslar = {};
+
+document.addEventListener("keydown", function(e) {
+    tuslar[e.key.toLowerCase()] = true;
+});
+
+document.addEventListener("keyup", function(e) {
+    tuslar[e.key.toLowerCase()] = false;
+});
+
+function yeniPara() {
+    para.x = Math.random() * (canvas.width - 30);
+    para.y = Math.random() * (canvas.height - 30);
+}
+
+function guncelle() {
+
+    if (tuslar["w"] || tuslar["arrowup"])
+        oyuncu.y -= oyuncu.hiz;
+
+    if (tuslar["s"] || tuslar["arrowdown"])
+        oyuncu.y += oyuncu.hiz;
+
+    if (tuslar["a"] || tuslar["arrowleft"])
+        oyuncu.x -= oyuncu.hiz;
+
+    if (tuslar["d"] || tuslar["arrowright"])
+        oyuncu.x += oyuncu.hiz;
+
+    // Ekrandan çıkmayı engelle
+    oyuncu.x = Math.max(0, Math.min(canvas.width - oyuncu.boyut, oyuncu.x));
+    oyuncu.y = Math.max(0, Math.min(canvas.height - oyuncu.boyut, oyuncu.y));
+
+    // Para toplama
+    if (
+        oyuncu.x < para.x + para.boyut &&
+        oyuncu.x + oyuncu.boyut > para.x &&
+        oyuncu.y < para.y + para.boyut &&
+        oyuncu.y + oyuncu.boyut > para.y
+    ) {
+        skor++;
+        yeniPara();
+    }
+}
+
+function ciz() {
+
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+    // Zemin
+    ctx.fillStyle = "#5dbb63";
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+    // Para
+    ctx.fillStyle = "gold";
+    ctx.beginPath();
+    ctx.arc(
+        para.x + para.boyut / 2,
+        para.y + para.boyut / 2,
+        para.boyut / 2,
+        0,
+        Math.PI * 2
+    );
+    ctx.fill();
+
+    // Oyuncu
+    ctx.fillStyle = "blue";
+    ctx.fillRect(
+        oyuncu.x,
+        oyuncu.y,
+        oyuncu.boyut,
+        oyuncu.boyut
+    );
+
+    // Skor
+    ctx.fillStyle = "white";
+    ctx.font = "24px Arial";
+    ctx.fillText("Skor: " + skor, 20, 35);
+
+    // Kontroller
+    ctx.font = "16px Arial";
+    ctx.fillText("WASD / Ok tuşları ile hareket et", 20, 475);
+}
+
+function oyunDongusu() {
+    guncelle();
+    ciz();
+    requestAnimationFrame(oyunDongusu);
+}
+
+oyunDongusu();
+</script>
+
+<a href="index.html" aria-label="Ana sayfaya dön" title="Ana sayfa" style="position:fixed;right:16px;bottom:16px;z-index:2147483647;display:inline-flex;align-items:center;justify-content:center;min-height:44px;padding:0 16px;background:#d8f26a;color:#202820;border:2px solid #202820;border-radius:7px;font:700 14px Arial,sans-serif;text-decoration:none;box-shadow:3px 3px 0 #202820;">Ana sayfa</a>
+</body>
+</html>

@@ -1,0 +1,98 @@
+```html
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+<meta charset="UTF-8">
+<title>Dünyanın En Sıkıcı Oyunu</title>
+
+<style>
+    body {
+        margin: 0;
+        height: 100vh;
+        background: #eeeeee;
+        font-family: Arial, sans-serif;
+        display: flex;
+        justify-content: center;
+        align-items: center;
+    }
+
+    #oyun {
+        text-align: center;
+        color: #333;
+    }
+
+    h1 {
+        font-size: 32px;
+        font-weight: normal;
+    }
+
+    #kare {
+        width: 100px;
+        height: 100px;
+        background: #999999;
+        margin: 50px auto;
+    }
+
+    #puan {
+        font-size: 22px;
+    }
+
+    #mesaj {
+        margin-top: 30px;
+        color: #777;
+    }
+</style>
+</head>
+
+<body>
+
+<div id="oyun">
+
+    <h1>Dünyanın En Sıkıcı Oyunu</h1>
+
+    <div id="kare"></div>
+
+    <div id="puan">
+        Sıkıcılık: 0
+    </div>
+
+    <div id="mesaj">
+        Bekle...
+    </div>
+
+</div>
+
+<script>
+
+let sikicilik = 0;
+
+setInterval(function() {
+
+    sikicilik++;
+
+    document.getElementById("puan").textContent =
+        "Sıkıcılık: " + sikicilik;
+
+    if (sikicilik === 10) {
+        document.getElementById("mesaj").textContent =
+            "Hâlâ hiçbir şey olmadı.";
+    }
+
+    if (sikicilik === 30) {
+        document.getElementById("mesaj").textContent =
+            "Cidden hâlâ bekliyor musun?";
+    }
+
+    if (sikicilik === 60) {
+        document.getElementById("mesaj").textContent =
+            "Tebrikler. Bir saattir... şaka, sadece bir dakika.";
+    }
+
+}, 1000);
+
+</script>
+
+<a href="index.html" aria-label="Ana sayfaya dön" title="Ana sayfa" style="position:fixed;right:16px;bottom:16px;z-index:2147483647;display:inline-flex;align-items:center;justify-content:center;min-height:44px;padding:0 16px;background:#d8f26a;color:#202820;border:2px solid #202820;border-radius:7px;font:700 14px Arial,sans-serif;text-decoration:none;box-shadow:3px 3px 0 #202820;">Ana sayfa</a>
+</body>
+</html>
+```

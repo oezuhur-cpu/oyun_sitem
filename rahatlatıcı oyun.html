@@ -1,0 +1,689 @@
+```html
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Rahatlatıcı Dünya</title>
+<style>
+    * { box-sizing:border-box; }
+
+    html, body {
+        margin:0;
+        width:100%;
+        height:100%;
+        overflow:hidden;
+        font-family:Arial, sans-serif;
+        background:#10252c;
+    }
+
+    canvas {
+        display:block;
+        width:100%;
+        height:100%;
+    }
+
+    #info {
+        position:fixed;
+        top:18px;
+        left:50%;
+        transform:translateX(-50%);
+        padding:10px 18px;
+        border-radius:20px;
+        background:rgba(0,0,0,.25);
+        color:white;
+        font-size:16px;
+        backdrop-filter:blur(5px);
+        pointer-events:none;
+        opacity:.8;
+    }
+
+    #music {
+        position:fixed;
+        right:18px;
+        bottom:18px;
+        padding:12px 17px;
+        border:0;
+        border-radius:25px;
+        cursor:pointer;
+        background:rgba(255,255,255,.8);
+        color:#18352f;
+        font-weight:bold;
+    }
+</style>
+</head>
+<body>
+
+<canvas id="game"></canvas>
+
+<div id="info">
+    🌿 Rahatlatıcı Dünya • WASD / Ok tuşları ile gez
+</div>
+
+<button id="music">🎵 Yağmur: Aç</button>
+
+<script>
+const canvas = document.getElementById("game");
+const ctx = canvas.getContext("2d");
+
+let W = innerWidth;
+let H = innerHeight;
+
+function resize(){
+    W = canvas.width = innerWidth;
+    H = canvas.height = innerHeight;
+}
+addEventListener("resize", resize);
+resize();
+
+const keys = {};
+
+addEventListener("keydown", e => {
+    keys[e.key.toLowerCase()] = true;
+});
+
+addEventListener("keyup", e => {
+    keys[e.key.toLowerCase()] = false;
+});
+
+const player = {
+    x:0,
+    y:0,
+    vx:0,
+    vy:0,
+    angle:0
+};
+
+let cameraX = 0;
+let cameraY = 0;
+
+const worldWidth = 5000;
+const worldHeight = 3500;
+
+player.x = worldWidth/2;
+player.y = worldHeight/2;
+
+function rand(a,b){
+    return Math.random()*(b-a)+a;
+}
+
+/* ---------------------------
+   AĞAÇLAR
+---------------------------- */
+
+const trees = [];
+
+for(let i=0;i<150;i++){
+    trees.push({
+        x:rand(100,worldWidth-100),
+        y:rand(100,worldHeight-100),
+        s:rand(.7,1.35),
+        phase:rand(0,Math.PI*2)
+    });
+}
+
+/* ---------------------------
+   ÇİÇEKLER
+---------------------------- */
+
+const flowers = [];
+
+for(let i=0;i<300;i++){
+    flowers.push({
+        x:rand(0,worldWidth),
+        y:rand(0,worldHeight),
+        phase:rand(0,Math.PI*2),
+        type:Math.floor(rand(0,3))
+    });
+}
+
+/* ---------------------------
+   SU
+---------------------------- */
+
+const lake = {
+    x:worldWidth/2 + 600,
+    y:worldHeight/2 - 150,
+    w:1000,
+    h:650
+};
+
+/* ---------------------------
+   ATEŞ BÖCEKLERİ
+---------------------------- */
+
+const bugs = [];
+
+for(let i=0;i<70;i++){
+    bugs.push({
+        x:rand(0,worldWidth),
+        y:rand(0,worldHeight),
+        vx:rand(-.25,.25),
+        vy:rand(-.18,.18),
+        phase:rand(0,Math.PI*2)
+    });
+}
+
+/* ---------------------------
+   BULUTLAR
+---------------------------- */
+
+const clouds = [];
+
+for(let i=0;i<12;i++){
+    clouds.push({
+        x:rand(0,worldWidth),
+        y:rand(100,700),
+        speed:rand(.08,.25),
+        size:rand(.7,1.5)
+    });
+}
+
+/* ---------------------------
+   YAĞMUR
+---------------------------- */
+
+const rain = [];
+
+for(let i=0;i<180;i++){
+    rain.push({
+        x:Math.random()*W,
+        y:Math.random()*H,
+        speed:rand(4,8),
+        length:rand(8,18)
+    });
+}
+
+let rainOn = true;
+
+/* ---------------------------
+   GÜN / GECE
+---------------------------- */
+
+let time = 0;
+
+function drawSky(){
+
+    const cycle = (Math.sin(time*.00003)+1)/2;
+
+    const top = {
+        r:Math.floor(25 + cycle*70),
+        g:Math.floor(45 + cycle*90),
+        b:Math.floor(65 + cycle*110)
+    };
+
+    const bottom = {
+        r:Math.floor(50 + cycle*120),
+        g:Math.floor(80 + cycle*110),
+        b:Math.floor(80 + cycle*100)
+    };
+
+    const grad = ctx.createLinearGradient(0,0,0,H);
+
+    grad.addColorStop(
+        0,
+        `rgb(${top.r},${top.g},${top.b})`
+    );
+
+    grad.addColorStop(
+        1,
+        `rgb(${bottom.r},${bottom.g},${bottom.b})`
+    );
+
+    ctx.fillStyle=grad;
+    ctx.fillRect(0,0,W,H);
+
+    /* Güneş / Ay */
+
+    const sunX = W*.78;
+    const sunY = 130 + Math.sin(time*.00003)*80;
+
+    ctx.beginPath();
+    ctx.arc(sunX,sunY,45,0,Math.PI*2);
+    ctx.fillStyle="rgba(255,240,180,.8)";
+    ctx.shadowBlur=40;
+    ctx.shadowColor="rgba(255,230,150,.8)";
+    ctx.fill();
+    ctx.shadowBlur=0;
+}
+
+/* ---------------------------
+   BULUT
+---------------------------- */
+
+function drawCloud(c){
+
+    let x=c.x-cameraX*.15;
+    let y=c.y-cameraY*.05;
+
+    ctx.save();
+    ctx.globalAlpha=.35;
+
+    ctx.fillStyle="#ffffff";
+
+    ctx.beginPath();
+
+    ctx.arc(x,y,35*c.size,0,Math.PI*2);
+    ctx.arc(x+45*c.size,y-15*c.size,45*c.size,0,Math.PI*2);
+    ctx.arc(x+90*c.size,y,32*c.size,0,Math.PI*2);
+
+    ctx.fillRect(
+        x-20*c.size,
+        y,
+        130*c.size,
+        35*c.size
+    );
+
+    ctx.fill();
+
+    ctx.restore();
+}
+
+/* ---------------------------
+   DÜNYA
+---------------------------- */
+
+function drawWorld(){
+
+    ctx.save();
+
+    ctx.translate(-cameraX,-cameraY);
+
+    /* Zemin */
+
+    ctx.fillStyle="#355c45";
+    ctx.fillRect(0,0,worldWidth,worldHeight);
+
+    /* Çim dalgaları */
+
+    ctx.globalAlpha=.18;
+
+    for(let i=0;i<500;i++){
+
+        const x=(i*97)%worldWidth;
+        const y=(i*173)%worldHeight;
+
+        ctx.strokeStyle="#b2d69a";
+
+        ctx.beginPath();
+        ctx.moveTo(x,y);
+        ctx.lineTo(x+4,y-8);
+        ctx.stroke();
+    }
+
+    ctx.globalAlpha=1;
+
+    /* Göl */
+
+    ctx.save();
+
+    ctx.beginPath();
+
+    ctx.ellipse(
+        lake.x,
+        lake.y,
+        lake.w/2,
+        lake.h/2,
+        0,
+        0,
+        Math.PI*2
+    );
+
+    ctx.fillStyle="#4e9eaa";
+    ctx.fill();
+
+    ctx.clip();
+
+    /* Su halkaları */
+
+    for(let i=0;i<35;i++){
+
+        const yy =
+            lake.y-lake.h/2+
+            ((i*73 + time*.04)%lake.h);
+
+        ctx.strokeStyle="rgba(210,245,240,.25)";
+        ctx.lineWidth=2;
+
+        ctx.beginPath();
+
+        ctx.ellipse(
+            lake.x,
+            yy,
+            80,
+            8,
+            0,
+            0,
+            Math.PI*2
+        );
+
+        ctx.stroke();
+    }
+
+    ctx.restore();
+
+    /* Çiçekler */
+
+    for(const f of flowers){
+
+        const sway=Math.sin(time*.002+f.phase)*2;
+
+        ctx.save();
+
+        ctx.translate(f.x+sway,f.y);
+
+        ctx.fillStyle="#75a75e";
+
+        ctx.fillRect(0,0,2,8);
+
+        ctx.beginPath();
+
+        if(f.type===0) ctx.fillStyle="#f7c6d9";
+        if(f.type===1) ctx.fillStyle="#ffe39a";
+        if(f.type===2) ctx.fillStyle="#c9c7ff";
+
+        ctx.arc(0,-2,4,0,Math.PI*2);
+        ctx.fill();
+
+        ctx.restore();
+    }
+
+    /* Ağaçlar */
+
+    for(const t of trees){
+
+        const sway =
+            Math.sin(time*.0015+t.phase)*4;
+
+        ctx.save();
+
+        ctx.translate(t.x+sway,t.y);
+        ctx.scale(t.s,t.s);
+
+        /* gölge */
+
+        ctx.fillStyle="rgba(0,0,0,.15)";
+        ctx.beginPath();
+        ctx.ellipse(0,28,35,12,0,0,Math.PI*2);
+        ctx.fill();
+
+        /* gövde */
+
+        ctx.fillStyle="#704b32";
+        ctx.fillRect(-8,-5,16,45);
+
+        /* yapraklar */
+
+        ctx.fillStyle="#24553b";
+
+        ctx.beginPath();
+        ctx.arc(-20,-15,27,0,Math.PI*2);
+        ctx.arc(15,-18,31,0,Math.PI*2);
+        ctx.arc(0,-45,35,0,Math.PI*2);
+        ctx.fill();
+
+        ctx.fillStyle="#34714b";
+
+        ctx.beginPath();
+        ctx.arc(-5,-48,20,0,Math.PI*2);
+        ctx.fill();
+
+        ctx.restore();
+    }
+
+    /* Ateş böcekleri */
+
+    for(const b of bugs){
+
+        const pulse =
+            (Math.sin(time*.004+b.phase)+1)/2;
+
+        ctx.save();
+
+        ctx.globalAlpha=.25+pulse*.75;
+        ctx.shadowBlur=15;
+        ctx.shadowColor="#fff7a0";
+        ctx.fillStyle="#fff7a0";
+
+        ctx.beginPath();
+        ctx.arc(b.x,b.y,2.5+pulse*2,0,Math.PI*2);
+        ctx.fill();
+
+        ctx.restore();
+    }
+
+    /* Oyuncu */
+
+    drawPlayer();
+
+    ctx.restore();
+}
+
+/* ---------------------------
+   OYUNCU
+---------------------------- */
+
+function drawPlayer(){
+
+    const walk =
+        Math.sin(time*.015)*3;
+
+    ctx.save();
+
+    ctx.translate(player.x,player.y);
+
+    /* gölge */
+
+    ctx.fillStyle="rgba(0,0,0,.25)";
+
+    ctx.beginPath();
+    ctx.ellipse(0,20,20,7,0,0,Math.PI*2);
+    ctx.fill();
+
+    /* gövde */
+
+    ctx.fillStyle="#d98b5f";
+
+    ctx.beginPath();
+    ctx.arc(0,-8,15,0,Math.PI*2);
+    ctx.fill();
+
+    /* saç */
+
+    ctx.fillStyle="#3b2a24";
+
+    ctx.beginPath();
+    ctx.arc(0,-17,14,Math.PI,Math.PI*2);
+    ctx.fill();
+
+    /* kıyafet */
+
+    ctx.fillStyle="#5d8fa3";
+    ctx.fillRect(-13,5,26,22);
+
+    /* bacaklar */
+
+    ctx.strokeStyle="#263a40";
+    ctx.lineWidth=6;
+
+    ctx.beginPath();
+    ctx.moveTo(-7,26);
+    ctx.lineTo(-9,38+walk);
+    ctx.moveTo(7,26);
+    ctx.lineTo(9,38-walk);
+    ctx.stroke();
+
+    /* yüz */
+
+    ctx.fillStyle="#222";
+
+    ctx.beginPath();
+    ctx.arc(-5,-7,2,0,Math.PI*2);
+    ctx.arc(5,-7,2,0,Math.PI*2);
+    ctx.fill();
+
+    ctx.restore();
+}
+
+/* ---------------------------
+   YAĞMUR
+---------------------------- */
+
+function drawRain(){
+
+    if(!rainOn)return;
+
+    ctx.save();
+
+    ctx.globalAlpha=.18;
+    ctx.strokeStyle="#d8f3ff";
+    ctx.lineWidth=1;
+
+    for(const r of rain){
+
+        ctx.beginPath();
+        ctx.moveTo(r.x,r.y);
+        ctx.lineTo(r.x-3,r.y+r.length);
+        ctx.stroke();
+
+        r.y+=r.speed;
+
+        if(r.y>H){
+            r.y=-20;
+            r.x=Math.random()*W;
+        }
+    }
+
+    ctx.restore();
+}
+
+/* ---------------------------
+   HAREKET
+---------------------------- */
+
+function update(){
+
+    let dx=0;
+    let dy=0;
+
+    if(keys["w"] || keys["arrowup"]) dy--;
+    if(keys["s"] || keys["arrowdown"]) dy++;
+    if(keys["a"] || keys["arrowleft"]) dx--;
+    if(keys["d"] || keys["arrowright"]) dx++;
+
+    if(dx!==0 || dy!==0){
+
+        const len=Math.hypot(dx,dy);
+
+        dx/=len;
+        dy/=len;
+
+        player.vx += dx*.35;
+        player.vy += dy*.35;
+    }
+
+    player.vx*=.90;
+    player.vy*=.90;
+
+    player.x+=player.vx;
+    player.y+=player.vy;
+
+    player.x=Math.max(40,Math.min(worldWidth-40,player.x));
+    player.y=Math.max(40,Math.min(worldHeight-40,player.y));
+
+    /* Kamera yumuşak takip */
+
+    const targetX=
+        player.x-W/2;
+
+    const targetY=
+        player.y-H/2;
+
+    cameraX +=
+        (targetX-cameraX)*.06;
+
+    cameraY +=
+        (targetY-cameraY)*.06;
+
+    cameraX=Math.max(0,
+        Math.min(worldWidth-W,cameraX));
+
+    cameraY=Math.max(0,
+        Math.min(worldHeight-H,cameraY));
+
+    /* Bulutlar */
+
+    for(const c of clouds){
+
+        c.x+=c.speed;
+
+        if(c.x>worldWidth+500)
+            c.x=-500;
+    }
+
+    /* Ateş böcekleri */
+
+    for(const b of bugs){
+
+        b.x+=b.vx;
+        b.y+=b.vy;
+
+        if(Math.random()<.01){
+            b.vx+=rand(-.08,.08);
+            b.vy+=rand(-.08,.08);
+        }
+
+        b.vx=Math.max(-.4,Math.min(.4,b.vx));
+        b.vy=Math.max(-.4,Math.min(.4,b.vy));
+    }
+
+    time++;
+}
+
+/* ---------------------------
+   ÇİZİM
+---------------------------- */
+
+function draw(){
+
+    drawSky();
+
+    for(const c of clouds)
+        drawCloud(c);
+
+    drawWorld();
+
+    drawRain();
+}
+
+/* ---------------------------
+   YAĞMUR BUTONU
+---------------------------- */
+
+document.getElementById("music").onclick=()=>{
+
+    rainOn=!rainOn;
+
+    document.getElementById("music").textContent =
+        rainOn ? "🎵 Yağmur: Aç" : "🔇 Yağmur: Kapalı";
+};
+
+/* ---------------------------
+   OYUN DÖNGÜSÜ
+---------------------------- */
+
+function loop(){
+
+    update();
+    draw();
+
+    requestAnimationFrame(loop);
+}
+
+loop();
+</script>
+
+<a href="index.html" aria-label="Ana sayfaya dön" title="Ana sayfa" style="position:fixed;right:16px;bottom:16px;z-index:2147483647;display:inline-flex;align-items:center;justify-content:center;min-height:44px;padding:0 16px;background:#d8f26a;color:#202820;border:2px solid #202820;border-radius:7px;font:700 14px Arial,sans-serif;text-decoration:none;box-shadow:3px 3px 0 #202820;">Ana sayfa</a>
+</body>
+</html>
+```

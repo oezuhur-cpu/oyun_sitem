@@ -1,0 +1,439 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+<meta charset="UTF-8">
+<title>Asteroids - Atari Tarzı</title>
+<style>
+    html, body {
+        margin: 0;
+        padding: 0;
+        background: #000;
+        overflow: hidden;
+        height: 100%;
+    }
+
+    canvas {
+        display: block;
+        margin: auto;
+        background: #000;
+    }
+
+    #info {
+        position: fixed;
+        top: 10px;
+        left: 10px;
+        color: white;
+        font: 18px monospace;
+        z-index: 2;
+    }
+</style>
+</head>
+
+<body>
+
+<div id="info">
+    SKOR: <span id="score">0</span>
+    &nbsp;&nbsp; CAN: <span id="lives">3</span>
+</div>
+
+<canvas id="game"></canvas>
+
+<script>
+const canvas = document.getElementById("game");
+const ctx = canvas.getContext("2d");
+
+canvas.width = 900;
+canvas.height = 600;
+
+let score = 0;
+let lives = 3;
+let gameOver = false;
+
+const keys = {};
+
+document.addEventListener("keydown", e => {
+    keys[e.code] = true;
+
+    if (e.code === "Space") {
+        shoot();
+    }
+
+    if (gameOver && e.code === "Enter") {
+        location.reload();
+    }
+});
+
+document.addEventListener("keyup", e => {
+    keys[e.code] = false;
+});
+
+// =========================
+// OYUNCU
+// =========================
+
+const player = {
+    x: canvas.width / 2,
+    y: canvas.height / 2,
+    angle: -Math.PI / 2,
+    speedX: 0,
+    speedY: 0,
+    radius: 15,
+    cooldown: 0
+};
+
+function drawPlayer() {
+    ctx.save();
+
+    ctx.translate(player.x, player.y);
+    ctx.rotate(player.angle);
+
+    ctx.strokeStyle = "white";
+    ctx.lineWidth = 2;
+
+    ctx.beginPath();
+    ctx.moveTo(18, 0);
+    ctx.lineTo(-12, -10);
+    ctx.lineTo(-7, 0);
+    ctx.lineTo(-12, 10);
+    ctx.closePath();
+    ctx.stroke();
+
+    // Motor ateşi
+    if (keys["ArrowUp"] || keys["KeyW"]) {
+        ctx.strokeStyle = "orange";
+
+        ctx.beginPath();
+        ctx.moveTo(-9, -5);
+        ctx.lineTo(-22, 0);
+        ctx.lineTo(-9, 5);
+        ctx.stroke();
+    }
+
+    ctx.restore();
+}
+
+// =========================
+// MERMİLER
+// =========================
+
+let bullets = [];
+
+function shoot() {
+    if (player.cooldown > 0 || gameOver) return;
+
+    bullets.push({
+        x: player.x + Math.cos(player.angle) * 18,
+        y: player.y + Math.sin(player.angle) * 18,
+        vx: Math.cos(player.angle) * 8,
+        vy: Math.sin(player.angle) * 8,
+        life: 70
+    });
+
+    player.cooldown = 10;
+}
+
+function updateBullets() {
+    for (let i = bullets.length - 1; i >= 0; i--) {
+        const b = bullets[i];
+
+        b.x += b.vx;
+        b.y += b.vy;
+        b.life--;
+
+        if (b.x < 0) b.x = canvas.width;
+        if (b.x > canvas.width) b.x = 0;
+        if (b.y < 0) b.y = canvas.height;
+        if (b.y > canvas.height) b.y = 0;
+
+        if (b.life <= 0) {
+            bullets.splice(i, 1);
+        }
+    }
+}
+
+function drawBullets() {
+    ctx.fillStyle = "white";
+
+    for (const b of bullets) {
+        ctx.beginPath();
+        ctx.arc(b.x, b.y, 2, 0, Math.PI * 2);
+        ctx.fill();
+    }
+}
+
+// =========================
+// ASTEROİTLER
+// =========================
+
+let asteroids = [];
+
+function createAsteroid(x, y, size) {
+    const points = [];
+
+    const count = 8;
+
+    for (let i = 0; i < count; i++) {
+        const angle = i / count * Math.PI * 2;
+        const radius = size * (0.75 + Math.random() * 0.35);
+
+        points.push({
+            x: Math.cos(angle) * radius,
+            y: Math.sin(angle) * radius
+        });
+    }
+
+    asteroids.push({
+        x,
+        y,
+        size,
+        vx: (Math.random() - 0.5) * 2,
+        vy: (Math.random() - 0.5) * 2,
+        angle: Math.random() * Math.PI * 2,
+        rotation: (Math.random() - 0.5) * 0.04,
+        points
+    });
+}
+
+function spawnAsteroids() {
+    for (let i = 0; i < 7; i++) {
+        let x, y;
+
+        do {
+            x = Math.random() * canvas.width;
+            y = Math.random() * canvas.height;
+        } while (
+            Math.hypot(x - player.x, y - player.y) < 180
+        );
+
+        createAsteroid(x, y, 35 + Math.random() * 20);
+    }
+}
+
+spawnAsteroids();
+
+function drawAsteroid(a) {
+    ctx.save();
+
+    ctx.translate(a.x, a.y);
+    ctx.rotate(a.angle);
+
+    ctx.strokeStyle = "white";
+    ctx.lineWidth = 2;
+
+    ctx.beginPath();
+
+    a.points.forEach((p, i) => {
+        if (i === 0) {
+            ctx.moveTo(p.x, p.y);
+        } else {
+            ctx.lineTo(p.x, p.y);
+        }
+    });
+
+    ctx.closePath();
+    ctx.stroke();
+
+    ctx.restore();
+}
+
+function updateAsteroids() {
+    for (const a of asteroids) {
+        a.x += a.vx;
+        a.y += a.vy;
+        a.angle += a.rotation;
+
+        if (a.x < -a.size) a.x = canvas.width + a.size;
+        if (a.x > canvas.width + a.size) a.x = -a.size;
+
+        if (a.y < -a.size) a.y = canvas.height + a.size;
+        if (a.y > canvas.height + a.size) a.y = -a.size;
+    }
+}
+
+// =========================
+// ÇARPIŞMALAR
+// =========================
+
+function distance(a, b) {
+    return Math.hypot(a.x - b.x, a.y - b.y);
+}
+
+function checkBulletCollisions() {
+    for (let i = bullets.length - 1; i >= 0; i--) {
+        const b = bullets[i];
+
+        for (let j = asteroids.length - 1; j >= 0; j--) {
+            const a = asteroids[j];
+
+            if (distance(b, a) < a.size) {
+
+                bullets.splice(i, 1);
+
+                score += Math.round(100 / a.size * 20);
+
+                document.getElementById("score").textContent = score;
+
+                // Büyük asteroid parçalanıyor
+                if (a.size > 22) {
+                    createAsteroid(a.x, a.y, a.size * 0.55);
+                    createAsteroid(a.x, a.y, a.size * 0.55);
+                }
+
+                asteroids.splice(j, 1);
+
+                break;
+            }
+        }
+    }
+}
+
+function checkPlayerCollision() {
+    for (const a of asteroids) {
+        if (distance(player, a) < a.size + player.radius) {
+
+            lives--;
+
+            document.getElementById("lives").textContent = lives;
+
+            player.x = canvas.width / 2;
+            player.y = canvas.height / 2;
+            player.speedX = 0;
+            player.speedY = 0;
+
+            if (lives <= 0) {
+                gameOver = true;
+            }
+
+            break;
+        }
+    }
+}
+
+// =========================
+// OYUNCU HAREKETİ
+// =========================
+
+function updatePlayer() {
+
+    if (keys["ArrowLeft"] || keys["KeyA"]) {
+        player.angle -= 0.08;
+    }
+
+    if (keys["ArrowRight"] || keys["KeyD"]) {
+        player.angle += 0.08;
+    }
+
+    if (keys["ArrowUp"] || keys["KeyW"]) {
+        player.speedX += Math.cos(player.angle) * 0.12;
+        player.speedY += Math.sin(player.angle) * 0.12;
+    }
+
+    player.x += player.speedX;
+    player.y += player.speedY;
+
+    // Uzayda ekranın diğer tarafından çık
+    if (player.x < 0) player.x = canvas.width;
+    if (player.x > canvas.width) player.x = 0;
+
+    if (player.y < 0) player.y = canvas.height;
+    if (player.y > canvas.height) player.y = 0;
+
+    // Sürtünme
+    player.speedX *= 0.99;
+    player.speedY *= 0.99;
+
+    if (player.cooldown > 0) {
+        player.cooldown--;
+    }
+}
+
+// =========================
+// YILDIZLAR
+// =========================
+
+const stars = [];
+
+for (let i = 0; i < 120; i++) {
+    stars.push({
+        x: Math.random() * canvas.width,
+        y: Math.random() * canvas.height,
+        size: Math.random() * 2
+    });
+}
+
+function drawStars() {
+    ctx.fillStyle = "white";
+
+    for (const s of stars) {
+        ctx.fillRect(s.x, s.y, s.size, s.size);
+    }
+}
+
+// =========================
+// OYUN DÖNGÜSÜ
+// =========================
+
+function update() {
+
+    if (gameOver) return;
+
+    updatePlayer();
+    updateBullets();
+    updateAsteroids();
+
+    checkBulletCollisions();
+    checkPlayerCollision();
+
+    // Asteroitler biterse yeni dalga
+    if (asteroids.length === 0) {
+        spawnAsteroids();
+    }
+}
+
+function draw() {
+
+    ctx.fillStyle = "black";
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+    drawStars();
+
+    for (const a of asteroids) {
+        drawAsteroid(a);
+    }
+
+    drawBullets();
+    drawPlayer();
+
+    if (gameOver) {
+
+        ctx.fillStyle = "white";
+        ctx.textAlign = "center";
+
+        ctx.font = "50px monospace";
+        ctx.fillText(
+            "GAME OVER",
+            canvas.width / 2,
+            canvas.height / 2
+        );
+
+        ctx.font = "20px monospace";
+        ctx.fillText(
+            "ENTER = YENİDEN BAŞLAT",
+            canvas.width / 2,
+            canvas.height / 2 + 45
+        );
+    }
+}
+
+function gameLoop() {
+    update();
+    draw();
+    requestAnimationFrame(gameLoop);
+}
+
+gameLoop();
+</script>
+
+<a href="index.html" aria-label="Ana sayfaya dön" title="Ana sayfa" style="position:fixed;right:16px;bottom:16px;z-index:2147483647;display:inline-flex;align-items:center;justify-content:center;min-height:44px;padding:0 16px;background:#d8f26a;color:#202820;border:2px solid #202820;border-radius:7px;font:700 14px Arial,sans-serif;text-decoration:none;box-shadow:3px 3px 0 #202820;">Ana sayfa</a>
+</body>
+</html>

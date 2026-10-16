@@ -1,0 +1,500 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="theme-color" content="#f2efe6">
+  <meta name="description" content="Tarayıcıda hemen oynayabileceğin ücretsiz mini oyunlar.">
+  <title>OEFE Oyunları | Oyun arşivi</title>
+  <style>
+    :root {
+      color-scheme: light;
+      --paper: #f2efe6;
+      --ink: #202820;
+      --muted: #6b7167;
+      --line: #d9d7cc;
+      --green: #d8f26a;
+      --orange: #f07848;
+      --blue: #7dc8c2;
+      --white: #fffef9;
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      background-color: var(--paper);
+      background-image: radial-gradient(#20282012 0.7px, transparent 0.7px);
+      background-size: 8px 8px;
+      color: var(--ink);
+      font-family: "Trebuchet MS", "Segoe UI", sans-serif;
+    }
+
+    a { color: inherit; }
+
+    .topbar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      min-height: 66px;
+      padding: 0 clamp(20px, 5vw, 76px);
+      border-bottom: 1px solid var(--line);
+      background: var(--paper);
+    }
+
+    .brand {
+      display: inline-flex;
+      align-items: center;
+      gap: 10px;
+      font-size: 15px;
+      font-weight: 900;
+      letter-spacing: 0;
+      text-decoration: none;
+      text-transform: uppercase;
+    }
+
+    .brand-mark {
+      display: grid;
+      width: 30px;
+      aspect-ratio: 1;
+      place-items: center;
+      background: var(--green);
+      border: 1px solid var(--ink);
+      border-radius: 8px;
+      font-size: 17px;
+    }
+
+    .top-note {
+      color: var(--muted);
+      font-size: 12px;
+      font-weight: 700;
+      text-transform: uppercase;
+    }
+
+    main {
+      width: min(1120px, calc(100% - 40px));
+      margin: 0 auto;
+    }
+
+    .intro {
+      display: grid;
+      grid-template-columns: 1fr auto;
+      align-items: end;
+      gap: 30px;
+      padding: clamp(48px, 8vw, 96px) 0 40px;
+    }
+
+    .eyebrow {
+      display: flex;
+      align-items: center;
+      gap: 9px;
+      margin: 0 0 14px;
+      color: #527063;
+      font-size: 12px;
+      font-weight: 900;
+      text-transform: uppercase;
+    }
+
+    .eyebrow::before {
+      width: 24px;
+      height: 3px;
+      background: var(--orange);
+      content: "";
+    }
+
+    h1 {
+      max-width: 720px;
+      margin: 0;
+      font-family: Georgia, "Times New Roman", serif;
+      font-size: clamp(42px, 7vw, 78px);
+      font-weight: 700;
+      letter-spacing: 0;
+      line-height: 0.98;
+    }
+
+    h1 span {
+      position: relative;
+      z-index: 0;
+      white-space: nowrap;
+    }
+
+    h1 span::after {
+      position: absolute;
+      z-index: -1;
+      right: -5px;
+      bottom: 2px;
+      left: -5px;
+      height: 25%;
+      background: var(--green);
+      content: "";
+      transform: rotate(-1deg);
+    }
+
+    .intro-copy {
+      max-width: 250px;
+      margin: 18px 0 0;
+      color: var(--muted);
+      font-size: 15px;
+      line-height: 1.55;
+    }
+
+    .count-stamp {
+      display: grid;
+      width: 112px;
+      aspect-ratio: 1;
+      align-content: center;
+      justify-items: center;
+      margin-bottom: 7px;
+      border: 1px solid var(--ink);
+      border-radius: 50%;
+      background: var(--orange);
+      color: #fffef9;
+      transform: rotate(8deg);
+    }
+
+    .count-stamp strong {
+      font-family: Georgia, "Times New Roman", serif;
+      font-size: 36px;
+      line-height: 1;
+    }
+
+    .count-stamp span {
+      margin-top: 5px;
+      font-size: 10px;
+      font-weight: 900;
+      text-transform: uppercase;
+    }
+
+    .library { padding-bottom: 74px; }
+
+    .controls {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 18px;
+      padding: 17px 0;
+      border-top: 1px solid var(--ink);
+      border-bottom: 1px solid var(--line);
+    }
+
+    .filters {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 7px;
+    }
+
+    .filter {
+      min-height: 36px;
+      padding: 0 13px;
+      border: 1px solid transparent;
+      border-radius: 999px;
+      background: transparent;
+      color: var(--muted);
+      cursor: pointer;
+      font: inherit;
+      font-size: 12px;
+      font-weight: 800;
+    }
+
+    .filter:hover { border-color: var(--line); color: var(--ink); }
+    .filter[aria-pressed="true"] { background: var(--ink); color: white; }
+
+    .search {
+      display: flex;
+      flex: 0 1 260px;
+      align-items: center;
+      gap: 9px;
+      min-height: 40px;
+      padding: 0 12px;
+      border: 1px solid var(--line);
+      border-radius: 6px;
+      background: var(--white);
+      color: var(--muted);
+    }
+
+    .search svg { flex: 0 0 17px; }
+
+    .search input {
+      width: 100%;
+      min-width: 0;
+      border: 0;
+      outline: 0;
+      background: transparent;
+      color: var(--ink);
+      font: inherit;
+      font-size: 13px;
+    }
+
+    .search:focus-within { outline: 2px solid var(--blue); outline-offset: 2px; }
+
+    .results-line {
+      display: flex;
+      justify-content: space-between;
+      padding: 19px 0 12px;
+      color: var(--muted);
+      font-size: 12px;
+      font-weight: 700;
+    }
+
+    .game-grid {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 12px;
+    }
+
+    .game-card {
+      position: relative;
+      display: flex;
+      min-height: 148px;
+      flex-direction: column;
+      align-items: flex-start;
+      justify-content: space-between;
+      overflow: hidden;
+      padding: 17px;
+      border: 1px solid var(--line);
+      border-radius: 7px;
+      background: var(--white);
+      text-decoration: none;
+      transition: border-color 150ms ease, transform 150ms ease, box-shadow 150ms ease;
+    }
+
+    .game-card[hidden] { display: none; }
+
+    .game-card:nth-child(4n + 1) { --card-accent: var(--green); }
+    .game-card:nth-child(4n + 2) { --card-accent: #f5c4a4; }
+    .game-card:nth-child(4n + 3) { --card-accent: var(--blue); }
+    .game-card:nth-child(4n) { --card-accent: #e8d6a0; }
+
+    .game-card:hover {
+      z-index: 1;
+      border-color: var(--ink);
+      box-shadow: 3px 3px 0 var(--ink);
+      transform: translate(-2px, -2px);
+    }
+
+    .game-card:focus-visible, .filter:focus-visible {
+      outline: 3px solid var(--orange);
+      outline-offset: 3px;
+    }
+
+    .card-top {
+      display: flex;
+      width: 100%;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+    }
+
+    .tag {
+      padding: 5px 8px;
+      border-radius: 4px;
+      background: var(--card-accent);
+      color: var(--ink);
+      font-size: 9px;
+      font-weight: 900;
+      text-transform: uppercase;
+    }
+
+    .play-mark {
+      display: grid;
+      width: 27px;
+      aspect-ratio: 1;
+      place-items: center;
+      border: 1px solid var(--line);
+      border-radius: 50%;
+      color: var(--ink);
+      transition: background 150ms ease, transform 150ms ease;
+    }
+
+    .game-card:hover .play-mark {
+      border-color: var(--ink);
+      background: var(--green);
+      transform: translateX(2px);
+    }
+
+    .game-card h2 {
+      max-width: calc(100% - 10px);
+      margin: 20px 0 1px;
+      font-size: 16px;
+      font-weight: 800;
+      line-height: 1.25;
+      overflow-wrap: anywhere;
+    }
+
+    .empty-state {
+      display: none;
+      padding: 50px 20px;
+      border: 1px dashed var(--line);
+      color: var(--muted);
+      text-align: center;
+    }
+
+    .empty-state.visible { display: block; }
+
+    footer {
+      display: flex;
+      justify-content: space-between;
+      gap: 16px;
+      padding: 18px 0 25px;
+      border-top: 1px solid var(--line);
+      color: var(--muted);
+      font-size: 11px;
+    }
+
+    @media (max-width: 800px) {
+      .game-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+    }
+
+    @media (max-width: 620px) {
+      .top-note { font-size: 10px; }
+      .intro { grid-template-columns: 1fr auto; gap: 12px; padding-top: 55px; }
+      .count-stamp { width: 76px; }
+      .count-stamp strong { font-size: 27px; }
+      .count-stamp span { font-size: 8px; }
+      .intro-copy { max-width: 310px; font-size: 14px; }
+      .controls { align-items: stretch; flex-direction: column-reverse; }
+      .search { flex-basis: auto; }
+      .filters { gap: 4px; }
+      .filter { padding: 0 10px; }
+      .game-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 9px; }
+      .game-card { min-height: 137px; padding: 13px; }
+      .game-card h2 { font-size: 14px; }
+    }
+
+    @media (max-width: 360px) {
+      main { width: min(100% - 28px, 1120px); }
+      .game-grid { grid-template-columns: 1fr; }
+      .game-card { min-height: 105px; }
+      h1 { font-size: 39px; }
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      *, *::before, *::after { scroll-behavior: auto !important; transition-duration: 0.01ms !important; }
+    }
+  </style>
+</head>
+<body>
+  <header class="topbar">
+    <a class="brand" href="index.html" aria-label="OEFE Oyunları ana sayfa">
+      <span class="brand-mark" aria-hidden="true">▶</span>
+      OEFE Oyunları
+    </a>
+    <span class="top-note">Küçük oyunlar, büyük eğlence</span>
+  </header>
+
+  <main>
+    <section class="intro" aria-labelledby="page-title">
+      <div>
+        <p class="eyebrow">Oyun arşivi</p>
+        <h1 id="page-title">Bir oyun seç.<br><span>Hemen başla.</span></h1>
+        <p class="intro-copy">Aç, oyna, yeni bir favori bul. Bütün oyunlar tarayıcında, ücretsiz.</p>
+      </div>
+      <div class="count-stamp" aria-label="34 oyun">
+        <strong id="total-count">34</strong>
+        <span>oyun var</span>
+      </div>
+    </section>
+
+    <section class="library" aria-label="Oyun listesi">
+      <div class="controls">
+        <div class="filters" role="group" aria-label="Oyun türüne göre filtrele">
+          <button class="filter" type="button" data-filter="all" aria-pressed="true">Tümü</button>
+          <button class="filter" type="button" data-filter="aksiyon" aria-pressed="false">Aksiyon</button>
+          <button class="filter" type="button" data-filter="platform" aria-pressed="false">Platform</button>
+          <button class="filter" type="button" data-filter="strateji" aria-pressed="false">Strateji</button>
+          <button class="filter" type="button" data-filter="simulasyon" aria-pressed="false">Simülasyon</button>
+          <button class="filter" type="button" data-filter="diger" aria-pressed="false">Diğer</button>
+        </div>
+        <label class="search">
+          <svg aria-hidden="true" width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="7"></circle><path d="m20 20-4-4"></path></svg>
+          <input id="search-input" type="search" placeholder="Oyun ara..." autocomplete="off" aria-label="Oyunlarda ara">
+        </label>
+      </div>
+
+      <div class="results-line" aria-live="polite">
+        <span id="result-count">34 oyun</span>
+        <span>Bir oyuna tıklayarak başla <span aria-hidden="true">↗</span></span>
+      </div>
+
+      <div class="game-grid" id="game-grid">
+        <a class="game-card" href="ASTROİDS.html" data-category="aksiyon" data-title="astroids asteroids uzay"><span class="card-top"><span class="tag">Aksiyon</span><span class="play-mark" aria-hidden="true">↗</span></span><h2>Asteroids</h2></a>
+        <a class="game-card" href="bağımlıoyun.html" data-category="diger" data-title="bağımlı oyun"><span class="card-top"><span class="tag">Diğer</span><span class="play-mark" aria-hidden="true">↗</span></span><h2>Bağımlı Oyun</h2></a>
+        <a class="game-card" href="en gıcık oyun.html" data-category="platform" data-title="en gıcık oyun"><span class="card-top"><span class="tag">Platform</span><span class="play-mark" aria-hidden="true">↗</span></span><h2>En Gıcık Oyun</h2></a>
+        <a class="game-card" href="en heyecanlı oyun (2).html" data-category="aksiyon" data-title="en heyecanlı oyun 2"><span class="card-top"><span class="tag">Aksiyon</span><span class="play-mark" aria-hidden="true">↗</span></span><h2>En Heyecanlı Oyun 2</h2></a>
+        <a class="game-card" href="en heyecanlı oyun (3).html" data-category="aksiyon" data-title="en heyecanlı oyun 3"><span class="card-top"><span class="tag">Aksiyon</span><span class="play-mark" aria-hidden="true">↗</span></span><h2>En Heyecanlı Oyun 3</h2></a>
+        <a class="game-card" href="en heyecanlı oyun.html" data-category="aksiyon" data-title="en heyecanlı oyun"><span class="card-top"><span class="tag">Aksiyon</span><span class="play-mark" aria-hidden="true">↗</span></span><h2>En Heyecanlı Oyun</h2></a>
+        <a class="game-card" href="en iyi oyun.html" data-category="diger" data-title="en iyi oyun"><span class="card-top"><span class="tag">Diğer</span><span class="play-mark" aria-hidden="true">↗</span></span><h2>En İyi Oyun</h2></a>
+        <a class="game-card" href="en kolay oyun.html" data-category="diger" data-title="en kolay oyun"><span class="card-top"><span class="tag">Diğer</span><span class="play-mark" aria-hidden="true">↗</span></span><h2>En Kolay Oyun</h2></a>
+        <a class="game-card" href="en sinir bozucu oyun.html" data-category="platform" data-title="en sinir bozucu oyun"><span class="card-top"><span class="tag">Platform</span><span class="play-mark" aria-hidden="true">↗</span></span><h2>En Sinir Bozucu Oyun</h2></a>
+        <a class="game-card" href="en sıkıcı oyun.html" data-category="diger" data-title="en sıkıcı oyun"><span class="card-top"><span class="tag">Diğer</span><span class="play-mark" aria-hidden="true">↗</span></span><h2>En Sıkıcı Oyun</h2></a>
+        <a class="game-card" href="en zor oyun.html" data-category="platform" data-title="en zor oyun"><span class="card-top"><span class="tag">Platform</span><span class="play-mark" aria-hidden="true">↗</span></span><h2>En Zor Oyun</h2></a>
+        <a class="game-card" href="gıcık oyun.html" data-category="platform" data-title="gıcık oyun"><span class="card-top"><span class="tag">Platform</span><span class="play-mark" aria-hidden="true">↗</span></span><h2>Gıcık Oyun</h2></a>
+        <a class="game-card" href="heyecanlı oyun 3.html" data-category="aksiyon" data-title="heyecanlı oyun 3"><span class="card-top"><span class="tag">Aksiyon</span><span class="play-mark" aria-hidden="true">↗</span></span><h2>Heyecanlı Oyun 3</h2></a>
+        <a class="game-card" href="js_oyun_tanki.html" data-category="aksiyon" data-title="js oyun tankı tank"><span class="card-top"><span class="tag">Aksiyon</span><span class="play-mark" aria-hidden="true">↗</span></span><h2>JS Oyun Tankı</h2></a>
+        <a class="game-card" href="keskin nişancı oyunu.html" data-category="aksiyon" data-title="keskin nişancı oyunu"><span class="card-top"><span class="tag">Aksiyon</span><span class="play-mark" aria-hidden="true">↗</span></span><h2>Keskin Nişancı Oyunu</h2></a>
+        <a class="game-card" href="keskin nişancı oyunu2.html" data-category="aksiyon" data-title="keskin nişancı oyunu 2"><span class="card-top"><span class="tag">Aksiyon</span><span class="play-mark" aria-hidden="true">↗</span></span><h2>Keskin Nişancı Oyunu 2</h2></a>
+        <a class="game-card" href="krallık.html" data-category="strateji" data-title="krallık kingdom"><span class="card-top"><span class="tag">Strateji</span><span class="play-mark" aria-hidden="true">↗</span></span><h2>Krallık</h2></a>
+        <a class="game-card" href="minecraft 2.html" data-category="diger" data-title="minecraft 2"><span class="card-top"><span class="tag">Diğer</span><span class="play-mark" aria-hidden="true">↗</span></span><h2>Minecraft 2</h2></a>
+        <a class="game-card" href="minecraft.html" data-category="diger" data-title="minecraft"><span class="card-top"><span class="tag">Diğer</span><span class="play-mark" aria-hidden="true">↗</span></span><h2>Minecraft</h2></a>
+        <a class="game-card" href="naruto oyunu 1.html" data-category="aksiyon" data-title="naruto oyunu"><span class="card-top"><span class="tag">Aksiyon</span><span class="play-mark" aria-hidden="true">↗</span></span><h2>Naruto Oyunu</h2></a>
+        <a class="game-card" href="ninja oyunu.html" data-category="aksiyon" data-title="ninja oyunu"><span class="card-top"><span class="tag">Aksiyon</span><span class="play-mark" aria-hidden="true">↗</span></span><h2>Ninja Oyunu</h2></a>
+        <a class="game-card" href="normal ade oyun.html" data-category="diger" data-title="normal ade oyun"><span class="card-top"><span class="tag">Diğer</span><span class="play-mark" aria-hidden="true">↗</span></span><h2>Normal Ade Oyun</h2></a>
+        <a class="game-card" href="platformer.html" data-category="platform" data-title="platformer platform"><span class="card-top"><span class="tag">Platform</span><span class="play-mark" aria-hidden="true">↗</span></span><h2>Platformer</h2></a>
+        <a class="game-card" href="rahatlatıcı oyun.html" data-category="diger" data-title="rahatlatıcı oyun sakin"><span class="card-top"><span class="tag">Diğer</span><span class="play-mark" aria-hidden="true">↗</span></span><h2>Rahatlatıcı Oyun</h2></a>
+        <a class="game-card" href="rougilike.html" data-category="aksiyon" data-title="rougilike roguelike"><span class="card-top"><span class="tag">Aksiyon</span><span class="play-mark" aria-hidden="true">↗</span></span><h2>Rougilike</h2></a>
+        <a class="game-card" href="simulasyon 2.html" data-category="simulasyon" data-title="simulasyon 2 simülasyon"><span class="card-top"><span class="tag">Simülasyon</span><span class="play-mark" aria-hidden="true">↗</span></span><h2>Simülasyon 2</h2></a>
+        <a class="game-card" href="simulasyon.html" data-category="simulasyon" data-title="simulasyon simülasyon"><span class="card-top"><span class="tag">Simülasyon</span><span class="play-mark" aria-hidden="true">↗</span></span><h2>Simülasyon</h2></a>
+        <a class="game-card" href="sinir.html" data-category="platform" data-title="sinir"><span class="card-top"><span class="tag">Platform</span><span class="play-mark" aria-hidden="true">↗</span></span><h2>Sinir</h2></a>
+        <a class="game-card" href="son cephe.html" data-category="aksiyon" data-title="son cephe"><span class="card-top"><span class="tag">Aksiyon</span><span class="play-mark" aria-hidden="true">↗</span></span><h2>Son Cephe</h2></a>
+        <a class="game-card" href="son ışık.html" data-category="aksiyon" data-title="son ışık"><span class="card-top"><span class="tag">Aksiyon</span><span class="play-mark" aria-hidden="true">↗</span></span><h2>Son Işık</h2></a>
+        <a class="game-card" href="süpriz oyun.html" data-category="diger" data-title="süpriz oyun sürpriz"><span class="card-top"><span class="tag">Diğer</span><span class="play-mark" aria-hidden="true">↗</span></span><h2>Süpriz Oyun</h2></a>
+        <a class="game-card" href="çatışma.html" data-category="aksiyon" data-title="çatışma savaş"><span class="card-top"><span class="tag">Aksiyon</span><span class="play-mark" aria-hidden="true">↗</span></span><h2>Çatışma</h2></a>
+        <a class="game-card" href="ülke yönetme oyunu.html" data-category="strateji" data-title="ülke yönetme oyunu"><span class="card-top"><span class="tag">Strateji</span><span class="play-mark" aria-hidden="true">↗</span></span><h2>Ülke Yönetme Oyunu</h2></a>
+        <a class="game-card" href="ülke yönetme oyunu2.HTML" data-category="strateji" data-title="ülke yönetme oyunu 2"><span class="card-top"><span class="tag">Strateji</span><span class="play-mark" aria-hidden="true">↗</span></span><h2>Ülke Yönetme Oyunu 2</h2></a>
+        <a class="game-card" href="naruto_strike.html" data-category="aksiyon" data-title="naruto strike"><span class="card-top"><span class="tag">Aksiyon</span><span class="play-mark" aria-hidden="true">↗</span></span><h2>Naruto Strike</h2></a>
+      </div>
+      <p class="empty-state" id="empty-state">Bu aramayla eşleşen oyun bulunamadı.</p>
+    </section>
+
+    <footer>
+      <span>Cuma Oyunları</span>
+      <span>Tarayıcıda oyna · Ücretsiz</span>
+    </footer>
+  </main>
+
+  <script>
+    const cards = [...document.querySelectorAll(".game-card")];
+    const filters = [...document.querySelectorAll(".filter")];
+    const searchInput = document.getElementById("search-input");
+    const resultCount = document.getElementById("result-count");
+    const emptyState = document.getElementById("empty-state");
+    let activeFilter = "all";
+
+    function updateGames() {
+      const query = searchInput.value.trim().toLocaleLowerCase("tr");
+      let visibleCount = 0;
+
+      for (const card of cards) {
+        const matchesFilter = activeFilter === "all" || card.dataset.category === activeFilter;
+        const matchesSearch = card.dataset.title.toLocaleLowerCase("tr").includes(query);
+        const visible = matchesFilter && matchesSearch;
+        card.hidden = !visible;
+        if (visible) visibleCount += 1;
+      }
+
+      resultCount.textContent = `${visibleCount} oyun`;
+      emptyState.classList.toggle("visible", visibleCount === 0);
+    }
+
+    filters.forEach((button) => {
+      button.addEventListener("click", () => {
+        activeFilter = button.dataset.filter;
+        filters.forEach((filter) => filter.setAttribute("aria-pressed", String(filter === button)));
+        updateGames();
+      });
+    });
+
+    searchInput.addEventListener("input", updateGames);
+  </script>
+</body>
+</html>

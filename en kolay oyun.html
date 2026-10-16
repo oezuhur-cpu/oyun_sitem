@@ -1,0 +1,68 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+<meta charset="UTF-8">
+<title>Dünyanın En Kolay Oyunu</title>
+
+<style>
+    body {
+        margin: 0;
+        height: 100vh;
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        background: #222;
+        font-family: Arial, sans-serif;
+        color: white;
+    }
+
+    #oyun {
+        text-align: center;
+    }
+
+    h1 {
+        font-size: 40px;
+    }
+
+    #puan {
+        font-size: 30px;
+        margin: 20px;
+    }
+
+    button {
+        font-size: 35px;
+        padding: 25px 60px;
+        border: none;
+        border-radius: 20px;
+        cursor: pointer;
+        background: limegreen;
+    }
+
+    button:hover {
+        transform: scale(1.05);
+    }
+</style>
+</head>
+
+<body>
+
+<div id="oyun">
+    <h1>🏆 Dünyanın En Kolay Oyunu</h1>
+
+    <div id="puan">Puan: 0</div>
+
+    <button onclick="puanArtir()">TIKLA!</button>
+</div>
+
+<script>
+let puan = 0;
+
+function puanArtir() {
+    puan++;
+    document.getElementById("puan").textContent = "Puan: " + puan;
+}
+</script>
+
+<a href="index.html" aria-label="Ana sayfaya dön" title="Ana sayfa" style="position:fixed;right:16px;bottom:16px;z-index:2147483647;display:inline-flex;align-items:center;justify-content:center;min-height:44px;padding:0 16px;background:#d8f26a;color:#202820;border:2px solid #202820;border-radius:7px;font:700 14px Arial,sans-serif;text-decoration:none;box-shadow:3px 3px 0 #202820;">Ana sayfa</a>
+</body>
+</html>

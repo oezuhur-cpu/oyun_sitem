@@ -1,0 +1,1577 @@
+```html
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Wild Horizon</title>
+
+<style>
+* {
+    box-sizing: border-box;
+}
+
+html, body {
+    margin: 0;
+    padding: 0;
+    width: 100%;
+    height: 100%;
+    overflow: hidden;
+    background: #111;
+    font-family: Arial, sans-serif;
+}
+
+canvas {
+    display: block;
+    width: 100vw;
+    height: 100vh;
+}
+
+#hud {
+    position: fixed;
+    top: 18px;
+    left: 20px;
+    color: white;
+    font-size: 19px;
+    font-weight: bold;
+    text-shadow: 2px 2px 5px #000;
+    z-index: 5;
+}
+
+#help {
+    position: fixed;
+    bottom: 15px;
+    left: 50%;
+    transform: translateX(-50%);
+    color: rgba(255,255,255,.8);
+    font-size: 14px;
+    text-shadow: 1px 1px 4px #000;
+}
+</style>
+</head>
+
+<body>
+
+<canvas id="game"></canvas>
+
+<div id="hud">
+    ❤️ <span id="hp">100</span>
+    &nbsp;&nbsp;
+    🪙 <span id="coins">0</span>
+</div>
+
+<div id="help">
+    A/D veya ←/→ hareket • W / SPACE zıpla
+</div>
+
+<script>
+
+// =====================================================
+// CANVAS
+// =====================================================
+
+const canvas = document.getElementById("game");
+const ctx = canvas.getContext("2d");
+
+function resize() {
+    canvas.width = window.innerWidth;
+    canvas.height = window.innerHeight;
+}
+
+window.addEventListener("resize", resize);
+resize();
+
+// =====================================================
+// INPUT
+// =====================================================
+
+const keys = {};
+
+document.addEventListener("keydown", e => {
+
+    keys[e.key.toLowerCase()] = true;
+
+    if (
+        e.key === " " ||
+        e.key.toLowerCase() === "w" ||
+        e.key === "arrowup"
+    ) {
+        jumpPressed = true;
+    }
+
+    if (
+        ["arrowleft", "arrowright", "arrowup", " "].includes(
+            e.key.toLowerCase()
+        )
+    ) {
+        e.preventDefault();
+    }
+});
+
+document.addEventListener("keyup", e => {
+    keys[e.key.toLowerCase()] = false;
+});
+
+let jumpPressed = false;
+
+// =====================================================
+// DÜNYA
+// =====================================================
+
+const WORLD_WIDTH = 7000;
+
+const platforms = [
+    {x: 0,    y: 540, w: 700, h: 120},
+    {x: 850,  y: 500, w: 500, h: 160},
+    {x: 1500, y: 440, w: 400, h: 220},
+    {x: 2050, y: 520, w: 600, h: 140},
+    {x: 2800, y: 460, w: 500, h: 200},
+    {x: 3500, y: 400, w: 450, h: 260},
+    {x: 4150, y: 500, w: 600, h: 160},
+    {x: 4950, y: 430, w: 450, h: 230},
+    {x: 5600, y: 500, w: 500, h: 160},
+    {x: 6300, y: 450, w: 700, h: 210}
+];
+
+// =====================================================
+// OYUNCU
+// =====================================================
+
+const player = {
+
+    x: 150,
+    y: 400,
+
+    width: 38,
+    height: 64,
+
+    vx: 0,
+    vy: 0,
+
+    speed: 0.65,
+    maxSpeed: 7,
+
+    jumpPower: 14,
+
+    gravity: 0.65,
+
+    grounded: false,
+
+    hp: 100,
+
+    invincible: 0,
+
+    direction: 1
+
+};
+
+// =====================================================
+// COINLER
+// =====================================================
+
+const coins = [];
+
+function createCoins() {
+
+    const positions = [
+
+        [300, 450],
+        [520, 450],
+        [980, 410],
+        [1150, 410],
+        [1640, 350],
+        [1800, 350],
+        [2250, 470],
+        [2450, 470],
+        [2920, 390],
+        [3150, 390],
+        [3650, 330],
+        [3850, 330],
+        [4350, 450],
+        [4550, 450],
+        [5100, 380],
+        [5300, 380],
+        [5800, 450],
+        [6000, 450],
+        [6500, 400],
+        [6750, 400]
+
+    ];
+
+    for (const p of positions) {
+
+        coins.push({
+            x: p[0],
+            y: p[1],
+            r: 11,
+            collected: false,
+            phase: Math.random() * Math.PI * 2
+        });
+
+    }
+}
+
+createCoins();
+
+// =====================================================
+// DÜŞMANLAR
+// =====================================================
+
+const enemies = [
+
+    {
+        x: 1000,
+        y: 430,
+        w: 38,
+        h: 50,
+        min: 900,
+        max: 1250,
+        speed: 1.2,
+        direction: 1
+    },
+
+    {
+        x: 1700,
+        y: 370,
+        w: 38,
+        h: 50,
+        min: 1520,
+        max: 1870,
+        speed: 1.5,
+        direction: -1
+    },
+
+    {
+        x: 3000,
+        y: 390,
+        w: 38,
+        h: 50,
+        min: 2820,
+        max: 3270,
+        speed: 1.3,
+        direction: 1
+    },
+
+    {
+        x: 3700,
+        y: 330,
+        w: 38,
+        h: 50,
+        min: 3520,
+        max: 3900,
+        speed: 1.6,
+        direction: -1
+    }
+
+];
+
+// =====================================================
+// KAMERA
+// =====================================================
+
+let cameraX = 0;
+
+// =====================================================
+// PARÇACIKLAR
+// =====================================================
+
+const particles = [];
+
+function particle(x, y, amount = 8) {
+
+    for (let i = 0; i < amount; i++) {
+
+        particles.push({
+
+            x,
+            y,
+
+            vx: (Math.random() - .5) * 4,
+            vy: (Math.random() - .5) * 4,
+
+            life: 30 + Math.random() * 30,
+
+            size: 2 + Math.random() * 4
+
+        });
+
+    }
+}
+
+// =====================================================
+// ÇARPIŞMA
+// =====================================================
+
+function rectangleCollision(a, b) {
+
+    return (
+        a.x < b.x + b.w &&
+        a.x + a.width > b.x &&
+        a.y < b.y + b.h &&
+        a.y + a.height > b.y
+    );
+
+}
+
+// =====================================================
+// OYUNCU HAREKET
+// =====================================================
+
+function updatePlayer() {
+
+    const left =
+        keys["a"] || keys["arrowleft"];
+
+    const right =
+        keys["d"] || keys["arrowright"];
+
+    if (left) {
+
+        player.vx -= player.speed;
+        player.direction = -1;
+
+    }
+
+    if (right) {
+
+        player.vx += player.speed;
+        player.direction = 1;
+
+    }
+
+    if (!left && !right) {
+
+        player.vx *= .82;
+
+    }
+
+    player.vx = Math.max(
+        -player.maxSpeed,
+        Math.min(player.maxSpeed, player.vx)
+    );
+
+    // Zıplama
+
+    if (
+        jumpPressed &&
+        player.grounded
+    ) {
+
+        player.vy = -player.jumpPower;
+        player.grounded = false;
+
+        particle(
+            player.x + player.width / 2,
+            player.y + player.height,
+            12
+        );
+
+    }
+
+    jumpPressed = false;
+
+    // Yerçekimi
+
+    player.vy += player.gravity;
+
+    if (player.vy > 18)
+        player.vy = 18;
+
+    // Yatay hareket
+
+    player.x += player.vx;
+
+    // Dünya sınırı
+
+    if (player.x < 0) {
+        player.x = 0;
+        player.vx = 0;
+    }
+
+    // Dikey hareket
+
+    const oldY = player.y;
+
+    player.y += player.vy;
+
+    player.grounded = false;
+
+    // Platform çarpışması
+
+    for (const p of platforms) {
+
+        if (
+            player.x + player.width > p.x &&
+            player.x < p.x + p.w &&
+            oldY + player.height <= p.y &&
+            player.y + player.height >= p.y &&
+            player.vy >= 0
+        ) {
+
+            player.y = p.y - player.height;
+
+            player.vy = 0;
+
+            player.grounded = true;
+
+        }
+
+    }
+
+    // Haritanın altına düşme
+
+    if (player.y > 900) {
+
+        damagePlayer(100);
+
+    }
+
+    // Hasar sonrası kısa dokunulmazlık
+
+    if (player.invincible > 0) {
+        player.invincible--;
+    }
+
+}
+
+// =====================================================
+// HASAR
+// =====================================================
+
+function damagePlayer(amount) {
+
+    if (player.invincible > 0)
+        return;
+
+    player.hp -= amount;
+
+    player.invincible = 70;
+
+    particle(
+        player.x + player.width / 2,
+        player.y + player.height / 2,
+        20
+    );
+
+    if (player.hp <= 0) {
+
+        player.hp = 0;
+
+        setTimeout(resetGame, 800);
+
+    }
+
+}
+
+// =====================================================
+// DÜŞMANLAR
+// =====================================================
+
+function updateEnemies() {
+
+    for (const enemy of enemies) {
+
+        enemy.x +=
+            enemy.speed *
+            enemy.direction;
+
+        if (enemy.x < enemy.min) {
+
+            enemy.x = enemy.min;
+            enemy.direction = 1;
+
+        }
+
+        if (enemy.x > enemy.max) {
+
+            enemy.x = enemy.max;
+            enemy.direction = -1;
+
+        }
+
+        const box = {
+            x: enemy.x,
+            y: enemy.y,
+            width: enemy.w,
+            height: enemy.h
+        };
+
+        if (rectangleCollision(player, box)) {
+
+            damagePlayer(20);
+
+            player.vx =
+                enemy.direction * 8;
+
+            player.vy = -7;
+
+        }
+
+    }
+
+}
+
+// =====================================================
+// COINLER
+// =====================================================
+
+let coinCount = 0;
+
+function updateCoins(time) {
+
+    for (const coin of coins) {
+
+        if (coin.collected)
+            continue;
+
+        const cy =
+            coin.y +
+            Math.sin(
+                time / 300 +
+                coin.phase
+            ) * 5;
+
+        const dx =
+            player.x +
+            player.width / 2 -
+            coin.x;
+
+        const dy =
+            player.y +
+            player.height / 2 -
+            cy;
+
+        if (
+            Math.sqrt(dx * dx + dy * dy) < 30
+        ) {
+
+            coin.collected = true;
+
+            coinCount++;
+
+            particle(
+                coin.x,
+                cy,
+                15
+            );
+
+        }
+
+    }
+
+}
+
+// =====================================================
+// PARÇACIKLAR
+// =====================================================
+
+function updateParticles() {
+
+    for (
+        let i = particles.length - 1;
+        i >= 0;
+        i--
+    ) {
+
+        const p = particles[i];
+
+        p.x += p.vx;
+        p.y += p.vy;
+
+        p.vy += .08;
+
+        p.life--;
+
+        if (p.life <= 0) {
+
+            particles.splice(i, 1);
+
+        }
+
+    }
+
+}
+
+// =====================================================
+// KAMERA
+// =====================================================
+
+function updateCamera() {
+
+    const target =
+        player.x -
+        canvas.width * .35;
+
+    cameraX +=
+        (target - cameraX) * .08;
+
+    cameraX = Math.max(
+        0,
+        Math.min(
+            WORLD_WIDTH - canvas.width,
+            cameraX
+        )
+    );
+
+}
+
+// =====================================================
+// GÖKYÜZÜ
+// =====================================================
+
+function drawSky() {
+
+    const gradient =
+        ctx.createLinearGradient(
+            0,
+            0,
+            0,
+            canvas.height
+        );
+
+    gradient.addColorStop(
+        0,
+        "#172b49"
+    );
+
+    gradient.addColorStop(
+        .45,
+        "#4d718b"
+    );
+
+    gradient.addColorStop(
+        1,
+        "#d69a64"
+    );
+
+    ctx.fillStyle = gradient;
+
+    ctx.fillRect(
+        0,
+        0,
+        canvas.width,
+        canvas.height
+    );
+
+}
+
+// =====================================================
+// GÜNEŞ
+// =====================================================
+
+function drawSun() {
+
+    const x =
+        canvas.width * .78;
+
+    const y = 130;
+
+    const glow =
+        ctx.createRadialGradient(
+            x,
+            y,
+            10,
+            x,
+            y,
+            160
+        );
+
+    glow.addColorStop(
+        0,
+        "rgba(255,230,160,.65)"
+    );
+
+    glow.addColorStop(
+        1,
+        "rgba(255,190,100,0)"
+    );
+
+    ctx.fillStyle = glow;
+
+    ctx.beginPath();
+
+    ctx.arc(
+        x,
+        y,
+        160,
+        0,
+        Math.PI * 2
+    );
+
+    ctx.fill();
+
+    ctx.fillStyle = "#ffe0a0";
+
+    ctx.beginPath();
+
+    ctx.arc(
+        x,
+        y,
+        45,
+        0,
+        Math.PI * 2
+    );
+
+    ctx.fill();
+
+}
+
+// =====================================================
+// BULUT
+// =====================================================
+
+function drawCloud(x, y, scale) {
+
+    ctx.fillStyle =
+        "rgba(255,255,255,.16)";
+
+    ctx.beginPath();
+
+    ctx.arc(
+        x,
+        y,
+        35 * scale,
+        0,
+        Math.PI * 2
+    );
+
+    ctx.arc(
+        x + 40 * scale,
+        y - 15 * scale,
+        48 * scale,
+        0,
+        Math.PI * 2
+    );
+
+    ctx.arc(
+        x + 90 * scale,
+        y,
+        35 * scale,
+        0,
+        Math.PI * 2
+    );
+
+    ctx.fill();
+
+}
+
+// =====================================================
+// DAĞLAR
+// =====================================================
+
+function drawMountains() {
+
+    // Uzak dağlar
+
+    ctx.fillStyle = "#314557";
+
+    ctx.beginPath();
+
+    ctx.moveTo(0, 430);
+
+    for (
+        let x = -100;
+        x < canvas.width + 200;
+        x += 180
+    ) {
+
+        ctx.lineTo(
+            x,
+            300 +
+            Math.sin(x * .008) * 90
+        );
+
+    }
+
+    ctx.lineTo(
+        canvas.width,
+        canvas.height
+    );
+
+    ctx.lineTo(0, canvas.height);
+
+    ctx.closePath();
+
+    ctx.fill();
+
+
+    // Ön dağlar
+
+    ctx.fillStyle = "#263c42";
+
+    ctx.beginPath();
+
+    ctx.moveTo(0, 500);
+
+    for (
+        let x = -100;
+        x < canvas.width + 200;
+        x += 230
+    ) {
+
+        ctx.lineTo(
+            x,
+            370 +
+            Math.sin(x * .011) * 80
+        );
+
+    }
+
+    ctx.lineTo(
+        canvas.width,
+        canvas.height
+    );
+
+    ctx.lineTo(0, canvas.height);
+
+    ctx.closePath();
+
+    ctx.fill();
+
+}
+
+// =====================================================
+// ZEMİN
+// =====================================================
+
+function drawPlatform(p) {
+
+    // Toprak
+
+    const gradient =
+        ctx.createLinearGradient(
+            0,
+            p.y,
+            0,
+            p.y + p.h
+        );
+
+    gradient.addColorStop(
+        0,
+        "#52754c"
+    );
+
+    gradient.addColorStop(
+        .08,
+        "#344b35"
+    );
+
+    gradient.addColorStop(
+        1,
+        "#202a25"
+    );
+
+    ctx.fillStyle = gradient;
+
+    ctx.fillRect(
+        p.x - cameraX,
+        p.y,
+        p.w,
+        p.h
+    );
+
+    // Çim üstü
+
+    ctx.fillStyle = "#6e8e57";
+
+    ctx.fillRect(
+        p.x - cameraX,
+        p.y,
+        p.w,
+        9
+    );
+
+    // Küçük taşlar
+
+    ctx.fillStyle =
+        "rgba(20,20,20,.3)";
+
+    for (
+        let x = p.x + 20;
+        x < p.x + p.w;
+        x += 55
+    ) {
+
+        ctx.beginPath();
+
+        ctx.arc(
+            x - cameraX,
+            p.y + 30 +
+            (x % 30),
+            3,
+            0,
+            Math.PI * 2
+        );
+
+        ctx.fill();
+
+    }
+
+}
+
+// =====================================================
+// AĞAÇLAR
+// =====================================================
+
+function drawTree(x, y, scale) {
+
+    x -= cameraX;
+
+    if (
+        x < -100 ||
+        x > canvas.width + 100
+    )
+        return;
+
+    // Gölge
+
+    ctx.fillStyle =
+        "rgba(0,0,0,.2)";
+
+    ctx.beginPath();
+
+    ctx.ellipse(
+        x,
+        y + 10 * scale,
+        45 * scale,
+        12 * scale,
+        0,
+        0,
+        Math.PI * 2
+    );
+
+    ctx.fill();
+
+    // Gövde
+
+    const trunk =
+        ctx.createLinearGradient(
+            x - 10,
+            0,
+            x + 10,
+            0
+        );
+
+    trunk.addColorStop(
+        0,
+        "#39281e"
+    );
+
+    trunk.addColorStop(
+        .5,
+        "#79543a"
+    );
+
+    trunk.addColorStop(
+        1,
+        "#2b2019"
+    );
+
+    ctx.fillStyle = trunk;
+
+    ctx.fillRect(
+        x - 9 * scale,
+        y - 90 * scale,
+        18 * scale,
+        100 * scale
+    );
+
+    // Yapraklar
+
+    ctx.fillStyle = "#263f2b";
+
+    for (let i = 0; i < 5; i++) {
+
+        ctx.beginPath();
+
+        ctx.arc(
+            x +
+            (i - 2) * 22 * scale,
+            y -
+            (100 + Math.random() * 25) * scale,
+            35 * scale,
+            0,
+            Math.PI * 2
+        );
+
+        ctx.fill();
+
+    }
+
+}
+
+// =====================================================
+// COIN ÇİZ
+// =====================================================
+
+function drawCoin(coin, time) {
+
+    if (coin.collected)
+        return;
+
+    const y =
+        coin.y +
+        Math.sin(
+            time / 300 +
+            coin.phase
+        ) * 5;
+
+    const x =
+        coin.x - cameraX;
+
+    ctx.save();
+
+    ctx.translate(x, y);
+
+    ctx.shadowBlur = 15;
+    ctx.shadowColor = "#ffd34d";
+
+    const g =
+        ctx.createLinearGradient(
+            -10,
+            0,
+            10,
+            0
+        );
+
+    g.addColorStop(
+        0,
+        "#9b6a18"
+    );
+
+    g.addColorStop(
+        .5,
+        "#ffe27a"
+    );
+
+    g.addColorStop(
+        1,
+        "#b47716"
+    );
+
+    ctx.fillStyle = g;
+
+    ctx.beginPath();
+
+    ctx.ellipse(
+        0,
+        0,
+        10,
+        12,
+        0,
+        0,
+        Math.PI * 2
+    );
+
+    ctx.fill();
+
+    ctx.shadowBlur = 0;
+
+    ctx.restore();
+
+}
+
+// =====================================================
+// OYUNCU ÇİZ
+// =====================================================
+
+function drawPlayer() {
+
+    if (
+        player.invincible > 0 &&
+        Math.floor(player.invincible / 5) % 2 === 0
+    ) {
+        return;
+    }
+
+    const x =
+        player.x - cameraX;
+
+    const y =
+        player.y;
+
+    ctx.save();
+
+    // Gölge
+
+    ctx.fillStyle =
+        "rgba(0,0,0,.3)";
+
+    ctx.beginPath();
+
+    ctx.ellipse(
+        x + player.width / 2,
+        y + player.height + 5,
+        25,
+        8,
+        0,
+        0,
+        Math.PI * 2
+    );
+
+    ctx.fill();
+
+    // Bacaklar
+
+    ctx.fillStyle = "#20242a";
+
+    ctx.fillRect(
+        x + 5,
+        y + 45,
+        10,
+        19
+    );
+
+    ctx.fillRect(
+        x + 24,
+        y + 45,
+        10,
+        19
+    );
+
+    // Gövde
+
+    const body =
+        ctx.createLinearGradient(
+            x,
+            y,
+            x + player.width,
+            y
+        );
+
+    body.addColorStop(
+        0,
+        "#273746"
+    );
+
+    body.addColorStop(
+        .5,
+        "#526a78"
+    );
+
+    body.addColorStop(
+        1,
+        "#1d2931"
+    );
+
+    ctx.fillStyle = body;
+
+    ctx.beginPath();
+
+    ctx.roundRect(
+        x + 3,
+        y + 20,
+        player.width - 6,
+        32,
+        7
+    );
+
+    ctx.fill();
+
+    // Kafa
+
+    ctx.fillStyle = "#c68b64";
+
+    ctx.beginPath();
+
+    ctx.arc(
+        x + 19,
+        y + 13,
+        13,
+        0,
+        Math.PI * 2
+    );
+
+    ctx.fill();
+
+    // Saç
+
+    ctx.fillStyle = "#2b211c";
+
+    ctx.beginPath();
+
+    ctx.arc(
+        x + 17,
+        y + 7,
+        13,
+        Math.PI,
+        Math.PI * 2
+    );
+
+    ctx.fill();
+
+    // Göz
+
+    ctx.fillStyle = "#111";
+
+    ctx.beginPath();
+
+    ctx.arc(
+        x + 24,
+        y + 12,
+        2,
+        0,
+        Math.PI * 2
+    );
+
+    ctx.fill();
+
+    // Çanta
+
+    ctx.fillStyle = "#704c32";
+
+    ctx.fillRect(
+        x - 3,
+        y + 24,
+        8,
+        22
+    );
+
+    ctx.restore();
+
+}
+
+// =====================================================
+// DÜŞMAN ÇİZ
+// =====================================================
+
+function drawEnemy(enemy) {
+
+    const x =
+        enemy.x - cameraX;
+
+    const y =
+        enemy.y;
+
+    ctx.save();
+
+    // Gölge
+
+    ctx.fillStyle =
+        "rgba(0,0,0,.3)";
+
+    ctx.beginPath();
+
+    ctx.ellipse(
+        x + enemy.w / 2,
+        y + enemy.h + 5,
+        25,
+        7,
+        0,
+        0,
+        Math.PI * 2
+    );
+
+    ctx.fill();
+
+    // Gövde
+
+    ctx.fillStyle = "#55342f";
+
+    ctx.fillRect(
+        x + 3,
+        y + 18,
+        enemy.w - 6,
+        30
+    );
+
+    // Kafa
+
+    ctx.fillStyle = "#a9674e";
+
+    ctx.beginPath();
+
+    ctx.arc(
+        x + 19,
+        y + 12,
+        13,
+        0,
+        Math.PI * 2
+    );
+
+    ctx.fill();
+
+    // Göz
+
+    ctx.fillStyle = "#111";
+
+    ctx.beginPath();
+
+    ctx.arc(
+        x + 25,
+        y + 11,
+        2,
+        0,
+        Math.PI * 2
+    );
+
+    ctx.fill();
+
+    ctx.restore();
+
+}
+
+// =====================================================
+// PARÇACIK ÇİZ
+// =====================================================
+
+function drawParticles() {
+
+    for (const p of particles) {
+
+        ctx.globalAlpha =
+            Math.max(0, p.life / 60);
+
+        ctx.fillStyle = "#d5c29a";
+
+        ctx.beginPath();
+
+        ctx.arc(
+            p.x - cameraX,
+            p.y,
+            p.size,
+            0,
+            Math.PI * 2
+        );
+
+        ctx.fill();
+
+    }
+
+    ctx.globalAlpha = 1;
+
+}
+
+// =====================================================
+// VİNYET
+// =====================================================
+
+function drawVignette() {
+
+    const gradient =
+        ctx.createRadialGradient(
+            canvas.width / 2,
+            canvas.height / 2,
+            canvas.height * .25,
+            canvas.width / 2,
+            canvas.height / 2,
+            canvas.height * .75
+        );
+
+    gradient.addColorStop(
+        0,
+        "rgba(0,0,0,0)"
+    );
+
+    gradient.addColorStop(
+        1,
+        "rgba(0,0,0,.5)"
+    );
+
+    ctx.fillStyle = gradient;
+
+    ctx.fillRect(
+        0,
+        0,
+        canvas.width,
+        canvas.height
+    );
+
+}
+
+// =====================================================
+// OYUN SONU
+// =====================================================
+
+let won = false;
+
+function checkWin() {
+
+    if (player.x > 6800) {
+        won = true;
+    }
+
+}
+
+function drawWin() {
+
+    if (!won)
+        return;
+
+    ctx.fillStyle =
+        "rgba(0,0,0,.65)";
+
+    ctx.fillRect(
+        0,
+        0,
+        canvas.width,
+        canvas.height
+    );
+
+    ctx.textAlign = "center";
+
+    ctx.fillStyle = "#fff";
+
+    ctx.font =
+        "bold 55px Arial";
+
+    ctx.fillText(
+        "BÖLÜM TAMAMLANDI!",
+        canvas.width / 2,
+        canvas.height / 2
+    );
+
+    ctx.font = "22px Arial";
+
+    ctx.fillText(
+        "Toplanan para: " +
+        coinCount,
+        canvas.width / 2,
+        canvas.height / 2 + 45
+    );
+
+    ctx.textAlign = "left";
+
+}
+
+// =====================================================
+// RESET
+// =====================================================
+
+function resetGame() {
+
+    player.x = 150;
+    player.y = 400;
+
+    player.vx = 0;
+    player.vy = 0;
+
+    player.hp = 100;
+
+    player.invincible = 0;
+
+    coinCount = 0;
+
+    for (const coin of coins) {
+        coin.collected = false;
+    }
+
+    won = false;
+
+}
+
+// =====================================================
+// ÇİZİM
+// =====================================================
+
+function draw(time) {
+
+    drawSky();
+
+    drawSun();
+
+    // Bulutlar
+
+    drawCloud(
+        200 - (time * .01 % 1200),
+        120,
+        1
+    );
+
+    drawCloud(
+        700 - (time * .006 % 1300),
+        190,
+        .7
+    );
+
+    drawCloud(
+        1100 - (time * .008 % 1400),
+        90,
+        .8
+    );
+
+    drawMountains();
+
+    // Uzak ağaçlar
+
+    drawTree(300, 520, .8);
+    drawTree(720, 520, .65);
+    drawTree(1200, 500, .8);
+    drawTree(1900, 440, .7);
+    drawTree(2550, 520, .9);
+    drawTree(3300, 460, .7);
+    drawTree(3900, 400, .8);
+    drawTree(4700, 500, .8);
+    drawTree(5500, 500, .7);
+    drawTree(6200, 450, .9);
+
+    // Platformlar
+
+    for (const p of platforms) {
+        drawPlatform(p);
+    }
+
+    // Coinler
+
+    for (const coin of coins) {
+        drawCoin(coin, time);
+    }
+
+    // Düşmanlar
+
+    for (const enemy of enemies) {
+        drawEnemy(enemy);
+    }
+
+    drawParticles();
+
+    drawPlayer();
+
+    drawVignette();
+
+    drawWin();
+
+}
+
+// =====================================================
+// ANA DÖNGÜ
+// =====================================================
+
+function gameLoop(time) {
+
+    if (!won) {
+
+        updatePlayer();
+
+        updateEnemies();
+
+        updateCoins(time);
+
+        updateParticles();
+
+        updateCamera();
+
+        checkWin();
+
+    }
+
+    draw(time);
+
+    document.getElementById("hp").textContent =
+        Math.max(0, Math.floor(player.hp));
+
+    document.getElementById("coins").textContent =
+        coinCount;
+
+    requestAnimationFrame(gameLoop);
+
+}
+
+gameLoop();
+
+</script>
+
+<a href="index.html" aria-label="Ana sayfaya dön" title="Ana sayfa" style="position:fixed;right:16px;bottom:16px;z-index:2147483647;display:inline-flex;align-items:center;justify-content:center;min-height:44px;padding:0 16px;background:#d8f26a;color:#202820;border:2px solid #202820;border-radius:7px;font:700 14px Arial,sans-serif;text-decoration:none;box-shadow:3px 3px 0 #202820;">Ana sayfa</a>
+</body>
+</html>
+```

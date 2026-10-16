@@ -1,0 +1,306 @@
+```html
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1.0">
+<title>Dünyanın En Gıcık Oyunu</title>
+<style>
+*{box-sizing:border-box}
+body{
+  margin:0;background:#080808;color:white;
+  font-family:Arial,sans-serif;overflow:hidden;
+}
+#game{
+  width:100vw;height:100vh;
+  position:relative;overflow:hidden;
+  background:linear-gradient(#15152b,#050509);
+}
+#world{
+  position:absolute;left:0;top:0;
+  width:2400px;height:700px;
+  transition:transform .08s linear;
+}
+#player{
+  position:absolute;width:34px;height:42px;
+  background:#00eaff;border:3px solid white;
+  border-radius:8px;z-index:10;
+  box-shadow:0 0 15px #00eaff;
+}
+.platform{
+  position:absolute;height:25px;
+  background:#42ff55;border:3px solid #caffd0;
+  border-radius:6px;
+}
+.bad{
+  background:#ff3030!important;
+  border-color:#ffaaaa!important;
+}
+.fake{
+  background:#9b45ff!important;
+}
+#ui{
+  position:fixed;top:12px;left:12px;z-index:100;
+  font-size:20px;text-shadow:2px 2px #000;
+}
+#message{
+  position:fixed;left:50%;top:50%;
+  transform:translate(-50%,-50%);
+  font-size:40px;font-weight:bold;
+  text-align:center;z-index:200;
+  pointer-events:none;
+}
+#hint{
+  position:fixed;bottom:12px;left:50%;
+  transform:translateX(-50%);
+  color:#bbb;z-index:100;
+}
+#win{
+  display:none;position:fixed;inset:0;
+  background:rgba(0,0,0,.94);
+  z-index:500;text-align:center;
+  padding-top:18vh;
+}
+#win h1{font-size:65px;color:#00ff66}
+#win button{
+  padding:15px 30px;font-size:22px;
+  cursor:pointer;border:0;border-radius:10px;
+}
+</style>
+</head>
+<body>
+
+<div id="game">
+  <div id="world">
+
+    <div id="player"></div>
+
+    <!-- Zeminler -->
+    <div class="platform" style="left:0;top:620px;width:450px"></div>
+    <div class="platform" style="left:530px;top:550px;width:180px"></div>
+    <div class="platform bad" style="left:790px;top:470px;width:170px"></div>
+    <div class="platform" style="left:1040px;top:390px;width:160px"></div>
+    <div class="platform fake" style="left:1280px;top:320px;width:170px"></div>
+    <div class="platform" style="left:1530px;top:410px;width:170px"></div>
+    <div class="platform bad" style="left:1780px;top:300px;width:160px"></div>
+    <div class="platform" style="left:2020px;top:450px;width:250px"></div>
+
+    <!-- Görünüşte masum ama aslında kötü -->
+    <div class="platform bad" style="left:350px;top:500px;width:80px"></div>
+    <div class="platform bad" style="left:610px;top:400px;width:70px"></div>
+    <div class="platform bad" style="left:900px;top:350px;width:70px"></div>
+
+  </div>
+</div>
+
+<div id="ui">
+  ☠️ Ölümler: <span id="deaths">0</span>/100
+  <br>
+  ⭐ Seviye: <span id="level">1</span>
+</div>
+
+<div id="message"></div>
+
+<div id="hint">
+  WASD / Ok tuşları = Hareket • SPACE = Zıpla
+</div>
+
+<div id="win">
+  <h1>🏆 100 ÖLÜM!</h1>
+  <p style="font-size:28px">
+    Tebrikler... artık oyunun gıcık olduğunu kanıtladın. 😈
+  </p>
+  <button onclick="location.reload()">Tekrar İşkence</button>
+</div>
+
+<script>
+const player=document.getElementById("player");
+const world=document.getElementById("world");
+const deathsText=document.getElementById("deaths");
+const levelText=document.getElementById("level");
+const message=document.getElementById("message");
+const win=document.getElementById("win");
+
+let x=70,y=560;
+let vx=0,vy=0;
+let left=false,right=false,jump=false;
+let onGround=false;
+let deaths=0;
+let level=1;
+let lastDeath=0;
+
+const gravity=.65;
+const speed=5.2;
+const jumpPower=-13;
+
+function resetPlayer(){
+  x=70;
+  y=560;
+  vx=0;
+  vy=0;
+}
+
+function die(reason="💀 ÖLDÜN!"){
+  if(Date.now()-lastDeath<500)return;
+  lastDeath=Date.now();
+
+  deaths++;
+  deathsText.textContent=deaths;
+
+  message.textContent=reason;
+
+  setTimeout(()=>{
+    message.textContent="";
+    resetPlayer();
+  },500);
+
+  if(deaths>=100){
+    win.style.display="block";
+  }
+
+  if(deaths%10===0 && deaths<100){
+    level++;
+    levelText.textContent=level;
+    message.textContent="😈 SEVİYE "+level+" — DAHA GICIK!";
+    setTimeout(()=>message.textContent="",1000);
+  }
+}
+
+document.addEventListener("keydown",e=>{
+  if(["ArrowLeft","ArrowRight","ArrowUp"," ","w","a","s","d","W","A","S","D"].includes(e.key))
+    e.preventDefault();
+
+  if(e.key==="ArrowLeft"||e.key==="a"||e.key==="A")left=true;
+  if(e.key==="ArrowRight"||e.key==="d"||e.key==="D")right=true;
+
+  if(e.key===" "||e.key==="ArrowUp"||e.key==="w"||e.key==="W")
+    jump=true;
+});
+
+document.addEventListener("keyup",e=>{
+  if(e.key==="ArrowLeft"||e.key==="a"||e.key==="A")left=false;
+  if(e.key==="ArrowRight"||e.key==="d"||e.key==="D")right=false;
+  if(e.key===" "||e.key==="ArrowUp"||e.key==="w"||e.key==="W")
+    jump=false;
+});
+
+function rect(el){
+  return {
+    x:parseFloat(el.style.left),
+    y:parseFloat(el.style.top),
+    w:el.offsetWidth,
+    h:el.offsetHeight
+  };
+}
+
+function update(){
+
+  // Hareket
+  if(left)vx=-speed;
+  else if(right)vx=speed;
+  else vx*=.8;
+
+  // Gıcık mekanik:
+  // Her 7 ölümde kontroller kısa süre tersine döner.
+  let evilControl=(deaths>0 && deaths%7===0 && deaths%14!==0);
+
+  if(evilControl){
+    vx=-vx;
+  }
+
+  if(jump && onGround){
+    vy=jumpPower;
+    onGround=false;
+  }
+
+  vy+=gravity;
+
+  let oldY=y;
+  x+=vx;
+  y+=vy;
+
+  if(x<0)x=0;
+  if(x>2350)x=2350;
+
+  onGround=false;
+
+  const platforms=[...document.querySelectorAll(".platform")];
+
+  for(const p of platforms){
+    const r=rect(p);
+
+    const horizontal=
+      x+34>r.x &&
+      x<r.x+r.w;
+
+    const falling=
+      vy>=0 &&
+      oldY+42<=r.y &&
+      y+42>=r.y;
+
+    if(horizontal && falling){
+
+      // Kırmızı platformlar öldürüyor
+      if(p.classList.contains("bad")){
+        die("💥 BU ZEMİN TUZAKTI!");
+        return;
+      }
+
+      // Mor platformlar bazen kayboluyor
+      if(p.classList.contains("fake")){
+        if(Math.random()<.75){
+          p.style.display="none";
+          die("😂 ZEMİN YOK OLDU!");
+          return;
+        }
+      }
+
+      y=r.y-42;
+      vy=0;
+      onGround=true;
+    }
+  }
+
+  // Haritanın altına düşme
+  if(y>700){
+    die("🕳️ BOŞLUĞA DÜŞTÜN!");
+    return;
+  }
+
+  // Sahte çıkış
+  if(x>2130 && x<2250 && y>390){
+    die("🚪 ÇIKIŞ SANDIN AMA DEĞİLDİ!");
+    return;
+  }
+
+  // Gerçek çıkış
+  if(x>2260){
+    message.textContent="🎉 BÖLÜM BİTTİ!";
+    setTimeout(()=>{
+      x=70;
+      y=560;
+      message.textContent="";
+    },1200);
+  }
+
+  player.style.left=x+"px";
+  player.style.top=y+"px";
+
+  // Kamera
+  let camera=x-window.innerWidth*.35;
+  camera=Math.max(0,Math.min(camera,2400-window.innerWidth));
+  world.style.transform=`translateX(${-camera}px)`;
+}
+
+function loop(){
+  update();
+  requestAnimationFrame(loop);
+}
+
+resetPlayer();
+loop();
+</script>
+<a href="index.html" aria-label="Ana sayfaya dön" title="Ana sayfa" style="position:fixed;right:16px;bottom:16px;z-index:2147483647;display:inline-flex;align-items:center;justify-content:center;min-height:44px;padding:0 16px;background:#d8f26a;color:#202820;border:2px solid #202820;border-radius:7px;font:700 14px Arial,sans-serif;text-decoration:none;box-shadow:3px 3px 0 #202820;">Ana sayfa</a>
+</body>
+</html>
+```

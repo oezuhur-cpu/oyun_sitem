@@ -1,0 +1,683 @@
+```html
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Nefes Kesen Oyun</title>
+
+<style>
+* {
+    box-sizing: border-box;
+}
+
+body {
+    margin: 0;
+    overflow: hidden;
+    background: #050505;
+    font-family: Arial, sans-serif;
+    color: white;
+}
+
+canvas {
+    display: block;
+}
+
+#ui {
+    position: fixed;
+    top: 15px;
+    left: 20px;
+    z-index: 5;
+    font-size: 22px;
+    line-height: 1.5;
+    text-shadow: 2px 2px 5px black;
+}
+
+#menu {
+    position: fixed;
+    inset: 0;
+    z-index: 10;
+    background: rgba(0,0,0,.95);
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    text-align: center;
+}
+
+#menu h1 {
+    font-size: 50px;
+    margin: 10px;
+}
+
+#menu p {
+    font-size: 19px;
+}
+
+button {
+    padding: 18px 45px;
+    font-size: 26px;
+    font-weight: bold;
+    border: none;
+    border-radius: 15px;
+    cursor: pointer;
+}
+
+button:hover {
+    transform: scale(1.08);
+}
+</style>
+</head>
+
+<body>
+
+<div id="ui">
+    ⭐ Puan: <span id="puan">0</span><br>
+    ❤️ Can: <span id="can">3</span><br>
+    ⚡ Seviye: <span id="seviye">1</span>
+</div>
+
+<div id="menu">
+    <h1>🔥 NEFES KESEN OYUN 🔥</h1>
+    <p>WASD veya OK TUŞLARI ile hareket et.</p>
+    <p>🟡 Sarı enerjileri topla.</p>
+    <p>🔴 Kırmızı düşmanlara yakalanma!</p>
+    <p>Her 5 puanda seviye yükselir.</p>
+    <button onclick="baslat()">BAŞLA</button>
+</div>
+
+<canvas id="oyun"></canvas>
+
+<script>
+
+const canvas = document.getElementById("oyun");
+const ctx = canvas.getContext("2d");
+
+let oyuncu;
+let dusmanlar = [];
+let enerji;
+
+let puan = 0;
+let can = 3;
+let seviye = 1;
+
+let oyunAktif = false;
+let tuslar = {};
+
+
+// -------------------------
+// EKRAN
+// -------------------------
+
+function ekranBoyutu() {
+    canvas.width = window.innerWidth;
+    canvas.height = window.innerHeight;
+}
+
+ekranBoyutu();
+
+window.addEventListener("resize", ekranBoyutu);
+
+
+// -------------------------
+// KLAVYE
+// -------------------------
+
+document.addEventListener("keydown", function(e) {
+
+    tuslar[e.key.toLowerCase()] = true;
+
+    if (
+        e.key === "ArrowUp" ||
+        e.key === "ArrowDown" ||
+        e.key === "ArrowLeft" ||
+        e.key === "ArrowRight"
+    ) {
+        e.preventDefault();
+    }
+});
+
+document.addEventListener("keyup", function(e) {
+
+    tuslar[e.key.toLowerCase()] = false;
+});
+
+
+// -------------------------
+// OYUNU BAŞLAT
+// -------------------------
+
+function baslat() {
+
+    puan = 0;
+    can = 3;
+    seviye = 1;
+
+    dusmanlar = [];
+
+    oyuncu = {
+        x: canvas.width / 2,
+        y: canvas.height / 2,
+        boyut: 18,
+        hiz: 6
+    };
+
+    // İlk 3 düşman
+    for (let i = 0; i < 3; i++) {
+        dusmanOlustur();
+    }
+
+    enerjiOlustur();
+
+    oyunAktif = true;
+
+    document.getElementById("menu").style.display = "none";
+
+    arayuzGuncelle();
+
+    requestAnimationFrame(oyunDongusu);
+}
+
+
+// -------------------------
+// DÜŞMAN OLUŞTUR
+// -------------------------
+
+function dusmanOlustur() {
+
+    let taraf = Math.floor(Math.random() * 4);
+
+    let x;
+    let y;
+
+    if (taraf === 0) {
+        x = -40;
+        y = Math.random() * canvas.height;
+    }
+
+    else if (taraf === 1) {
+        x = canvas.width + 40;
+        y = Math.random() * canvas.height;
+    }
+
+    else if (taraf === 2) {
+        x = Math.random() * canvas.width;
+        y = -40;
+    }
+
+    else {
+        x = Math.random() * canvas.width;
+        y = canvas.height + 40;
+    }
+
+    dusmanlar.push({
+
+        x: x,
+        y: y,
+
+        boyut: 20,
+
+        hiz: 1.5 + (seviye * 0.35)
+    });
+}
+
+
+// -------------------------
+// ENERJİ OLUŞTUR
+// -------------------------
+
+function enerjiOlustur() {
+
+    enerji = {
+
+        x: 60 + Math.random() * (canvas.width - 120),
+
+        y: 80 + Math.random() * (canvas.height - 140),
+
+        boyut: 13
+    };
+}
+
+
+// -------------------------
+// OYUNCU HAREKETİ
+// -------------------------
+
+function oyuncuHareket() {
+
+    if (tuslar["w"] || tuslar["arrowup"]) {
+        oyuncu.y -= oyuncu.hiz;
+    }
+
+    if (tuslar["s"] || tuslar["arrowdown"]) {
+        oyuncu.y += oyuncu.hiz;
+    }
+
+    if (tuslar["a"] || tuslar["arrowleft"]) {
+        oyuncu.x -= oyuncu.hiz;
+    }
+
+    if (tuslar["d"] || tuslar["arrowright"]) {
+        oyuncu.x += oyuncu.hiz;
+    }
+
+
+    // Ekrandan çıkmasını engelle
+
+    oyuncu.x = Math.max(
+        oyuncu.boyut,
+        Math.min(
+            canvas.width - oyuncu.boyut,
+            oyuncu.x
+        )
+    );
+
+    oyuncu.y = Math.max(
+        oyuncu.boyut,
+        Math.min(
+            canvas.height - oyuncu.boyut,
+            oyuncu.y
+        )
+    );
+}
+
+
+// -------------------------
+// DÜŞMAN HAREKETİ
+// -------------------------
+
+function dusmanHareket() {
+
+    for (let d of dusmanlar) {
+
+        let dx = oyuncu.x - d.x;
+        let dy = oyuncu.y - d.y;
+
+        let mesafe = Math.hypot(dx, dy);
+
+        if (mesafe > 0) {
+
+            d.x += (dx / mesafe) * d.hiz;
+
+            d.y += (dy / mesafe) * d.hiz;
+        }
+    }
+}
+
+
+// -------------------------
+// ÇARPIŞMALAR
+// -------------------------
+
+function carpismaKontrol() {
+
+
+    // DÜŞMAN
+
+    for (let i = dusmanlar.length - 1; i >= 0; i--) {
+
+        let d = dusmanlar[i];
+
+        let mesafe = Math.hypot(
+            oyuncu.x - d.x,
+            oyuncu.y - d.y
+        );
+
+        if (
+            mesafe <
+            oyuncu.boyut + d.boyut
+        ) {
+
+            can--;
+
+            // Çarpan düşmanı sil
+
+            dusmanlar.splice(i, 1);
+
+            // Oyuncuyu ortaya gönder
+
+            oyuncu.x = canvas.width / 2;
+            oyuncu.y = canvas.height / 2;
+
+            arayuzGuncelle();
+
+            if (can <= 0) {
+
+                oyunBitti();
+
+                return;
+            }
+        }
+    }
+
+
+    // ENERJİ
+
+    if (enerji) {
+
+        let mesafe = Math.hypot(
+            oyuncu.x - enerji.x,
+            oyuncu.y - enerji.y
+        );
+
+        if (
+            mesafe <
+            oyuncu.boyut + enerji.boyut
+        ) {
+
+            // 1 PUAN
+
+            puan++;
+
+            // Yeni enerji
+
+            enerjiOlustur();
+
+
+            // HER 5 PUANDA SEVİYE
+
+            if (puan % 5 === 0) {
+
+                seviye++;
+
+                // 2 yeni düşman
+
+                dusmanOlustur();
+                dusmanOlustur();
+
+
+                // BÜTÜN DÜŞMANLARI HIZLANDIR
+
+                for (let d of dusmanlar) {
+
+                    d.hiz =
+                        1.5 +
+                        (seviye * 0.35);
+                }
+
+
+                // Oyuncuyu da biraz hızlandır
+
+                oyuncu.hiz += 0.25;
+            }
+
+            arayuzGuncelle();
+        }
+    }
+}
+
+
+// -------------------------
+// ARAYÜZ
+// -------------------------
+
+function arayuzGuncelle() {
+
+    document.getElementById("puan").textContent = puan;
+
+    document.getElementById("can").textContent = can;
+
+    document.getElementById("seviye").textContent = seviye;
+}
+
+
+// -------------------------
+// ÇİZİM
+// -------------------------
+
+function ciz() {
+
+    // ARKA PLAN
+
+    ctx.fillStyle = "#080808";
+
+    ctx.fillRect(
+        0,
+        0,
+        canvas.width,
+        canvas.height
+    );
+
+
+    // IZGARA
+
+    ctx.strokeStyle = "#151515";
+
+    ctx.lineWidth = 1;
+
+    for (
+        let x = 0;
+        x < canvas.width;
+        x += 50
+    ) {
+
+        ctx.beginPath();
+
+        ctx.moveTo(x, 0);
+
+        ctx.lineTo(
+            x,
+            canvas.height
+        );
+
+        ctx.stroke();
+    }
+
+
+    for (
+        let y = 0;
+        y < canvas.height;
+        y += 50
+    ) {
+
+        ctx.beginPath();
+
+        ctx.moveTo(0, y);
+
+        ctx.lineTo(
+            canvas.width,
+            y
+        );
+
+        ctx.stroke();
+    }
+
+
+    // -------------------------
+    // ENERJİ
+    // -------------------------
+
+    if (enerji) {
+
+        ctx.beginPath();
+
+        ctx.arc(
+            enerji.x,
+            enerji.y,
+            enerji.boyut,
+            0,
+            Math.PI * 2
+        );
+
+        ctx.fillStyle = "#ffe600";
+
+        ctx.fill();
+
+
+        // Parlama
+
+        ctx.beginPath();
+
+        ctx.arc(
+            enerji.x,
+            enerji.y,
+            enerji.boyut + 9,
+            0,
+            Math.PI * 2
+        );
+
+        ctx.strokeStyle = "#ffe600";
+
+        ctx.lineWidth = 2;
+
+        ctx.stroke();
+    }
+
+
+    // -------------------------
+    // DÜŞMANLAR
+    // -------------------------
+
+    for (let d of dusmanlar) {
+
+        ctx.beginPath();
+
+        ctx.arc(
+            d.x,
+            d.y,
+            d.boyut,
+            0,
+            Math.PI * 2
+        );
+
+        ctx.fillStyle = "#ff1744";
+
+        ctx.fill();
+
+
+        // Gözler
+
+        ctx.fillStyle = "white";
+
+        ctx.beginPath();
+
+        ctx.arc(
+            d.x - 6,
+            d.y - 5,
+            4,
+            0,
+            Math.PI * 2
+        );
+
+        ctx.arc(
+            d.x + 6,
+            d.y - 5,
+            4,
+            0,
+            Math.PI * 2
+        );
+
+        ctx.fill();
+
+
+        // Göz bebekleri
+
+        ctx.fillStyle = "black";
+
+        ctx.beginPath();
+
+        ctx.arc(
+            d.x - 6,
+            d.y - 5,
+            2,
+            0,
+            Math.PI * 2
+        );
+
+        ctx.arc(
+            d.x + 6,
+            d.y - 5,
+            2,
+            0,
+            Math.PI * 2
+        );
+
+        ctx.fill();
+    }
+
+
+    // -------------------------
+    // OYUNCU
+    // -------------------------
+
+    ctx.beginPath();
+
+    ctx.arc(
+        oyuncu.x,
+        oyuncu.y,
+        oyuncu.boyut,
+        0,
+        Math.PI * 2
+    );
+
+    ctx.fillStyle = "#00aaff";
+
+    ctx.fill();
+
+
+    ctx.strokeStyle = "white";
+
+    ctx.lineWidth = 3;
+
+    ctx.stroke();
+}
+
+
+// -------------------------
+// ANA OYUN
+// -------------------------
+
+function oyunDongusu() {
+
+    if (!oyunAktif) {
+        return;
+    }
+
+    oyuncuHareket();
+
+    dusmanHareket();
+
+    carpismaKontrol();
+
+    ciz();
+
+    requestAnimationFrame(oyunDongusu);
+}
+
+
+// -------------------------
+// OYUN BİTTİ
+// -------------------------
+
+function oyunBitti() {
+
+    oyunAktif = false;
+
+    document.getElementById("menu").style.display = "flex";
+
+    document.querySelector("#menu h1").textContent =
+        "💀 OYUN BİTTİ";
+
+    document.querySelector("#menu p").textContent =
+        "⭐ Skorun: " + puan;
+
+    document.querySelector(
+        "#menu p:nth-of-type(2)"
+    ).textContent =
+        "⚡ Ulaştığın seviye: " + seviye;
+
+    document.querySelector(
+        "#menu p:nth-of-type(3)"
+    ).textContent =
+        "Tekrar dene ve rekorunu kır!";
+
+    document.querySelector("#menu button").textContent =
+        "TEKRAR OYNA";
+}
+
+</script>
+
+<a href="index.html" aria-label="Ana sayfaya dön" title="Ana sayfa" style="position:fixed;right:16px;bottom:16px;z-index:2147483647;display:inline-flex;align-items:center;justify-content:center;min-height:44px;padding:0 16px;background:#d8f26a;color:#202820;border:2px solid #202820;border-radius:7px;font:700 14px Arial,sans-serif;text-decoration:none;box-shadow:3px 3px 0 #202820;">Ana sayfa</a>
+</body>
+</html>
+```

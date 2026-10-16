@@ -1,0 +1,41 @@
+```html
+<!DOCTYPE html>
+<html lang="tr"><meta charset="UTF-8"><title>Kayıp Krallık</title>
+<style>
+body{background:#17251c;color:white;text-align:center;font-family:Arial}
+canvas{max-width:100%;background:#477d4b}
+</style>
+<h1>🏰 KAYIP KRALLIK</h1>
+<p>WASD: Yürü | E: Konuş | M: Haritayı göster</p>
+<canvas id="c" width="700" height="460"></canvas>
+<p id="msg">Köyün yaşlısıyla konuş. Krallığın kristali kayboldu!</p>
+<script>
+const c=document.getElementById('c'),g=c.getContext('2d');
+let p={x:70,y:80},keys={},quest=0,showMap=false;
+let npc=[{x:180,y:120,t:'Yaşlı',id:0},{x:500,y:330,t:'Muhafız',id:1},{x:550,y:90,t:'Hazine',id:2}];
+onkeydown=e=>{keys[e.key.toLowerCase()]=true;if(e.key.toLowerCase()==='m')showMap=!showMap;
+if(e.key.toLowerCase()==='e')interact()};
+onkeyup=e=>keys[e.key.toLowerCase()]=false;
+function interact(){
+let n=npc.find(n=>Math.hypot(p.x-n.x,p.y-n.y)<45);
+if(!n)return;
+if(n.id===0&&quest===0){quest=1;msg.textContent='Yaşlı: Kristali ormandaki muhafız koruyor!';}
+else if(n.id===1&&quest===1){quest=2;msg.textContent='Muhafız: Cesaretini kanıtladın. Hazineye gidebilirsin!';}
+else if(n.id===2&&quest===2){quest=3;msg.textContent='KRİSTALİ BULDUN! Krallığı kurtardın! 🎉';}
+else msg.textContent=quest===3?'Görev tamamlandı! Yeniden maceraya çık.':'Önce diğer karakterlerle konuş.'}
+const msg=document.getElementById('msg');
+function loop(){
+g.clearRect(0,0,700,460);
+g.fillStyle='#477d4b';g.fillRect(0,0,700,460);
+g.fillStyle='#b8a16a';g.fillRect(0,210,700,45);g.fillRect(300,0,40,460);
+[[100,280],[430,90],[600,200],[80,400]].forEach(([x,y])=>{g.fillStyle='#24653a';g.beginPath();g.arc(x,y,27,0,7);g.fill()});
+npc.forEach(n=>{g.fillStyle=n.id===2?'#62e9ff':'#e9bd76';g.fillRect(n.x-12,n.y-15,24,30);g.fillStyle='white';g.font='13px Arial';g.fillText(n.t,n.x-20,n.y-22)});
+if(!showMap){p.x+=((keys.d||keys.arrowright?1:0)-(keys.a||keys.arrowleft?1:0))*2.5;p.y+=((keys.s||keys.arrowdown?1:0)-(keys.w||keys.arrowup?1:0))*2.5}
+p.x=Math.max(10,Math.min(690,p.x));p.y=Math.max(10,Math.min(450,p.y));
+g.fillStyle='#51caff';g.fillRect(p.x-10,p.y-12,20,24);
+g.fillStyle='white';g.font='18px Arial';g.fillText('Görev: '+['Kristali araştır','Muhafızı bul','Hazineye git','Krallık kurtuldu'][quest],15,25);
+if(showMap){g.fillStyle='#000b';g.fillRect(180,100,340,250);g.fillStyle='white';g.fillText('HARİTA',320,130);npc.forEach(n=>g.fillText(n.t+' • '+n.x+','+n.y,230,170+n.id*35))}
+requestAnimationFrame(loop)}
+loop();
+</script><a href="index.html" aria-label="Ana sayfaya dön" title="Ana sayfa" style="position:fixed;right:16px;bottom:16px;z-index:2147483647;display:inline-flex;align-items:center;justify-content:center;min-height:44px;padding:0 16px;background:#d8f26a;color:#202820;border:2px solid #202820;border-radius:7px;font:700 14px Arial,sans-serif;text-decoration:none;box-shadow:3px 3px 0 #202820;">Ana sayfa</a></html>
+```

@@ -1,0 +1,899 @@
+```html
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Nefes Kesen Oyun</title>
+
+<style>
+* {
+    box-sizing: border-box;
+    user-select: none;
+}
+
+html, body {
+    margin: 0;
+    width: 100%;
+    height: 100%;
+    overflow: hidden;
+    background: #050505;
+    font-family: Arial, sans-serif;
+    color: white;
+}
+
+canvas {
+    display: block;
+}
+
+#ui {
+    position: fixed;
+    top: 14px;
+    left: 18px;
+    z-index: 5;
+    font-size: 20px;
+    line-height: 1.45;
+    text-shadow: 2px 2px 5px black;
+}
+
+#bossBar {
+    display: none;
+    position: fixed;
+    top: 18px;
+    left: 50%;
+    transform: translateX(-50%);
+    width: min(600px, 70vw);
+    z-index: 6;
+}
+
+#bossName {
+    text-align: center;
+    font-weight: bold;
+    margin-bottom: 5px;
+}
+
+#bossOuter {
+    height: 22px;
+    border: 2px solid white;
+    background: #300;
+    border-radius: 12px;
+    overflow: hidden;
+}
+
+#bossInner {
+    width: 100%;
+    height: 100%;
+    background: #ff1744;
+    transition: width .15s;
+}
+
+#power {
+    position: fixed;
+    right: 18px;
+    top: 18px;
+    z-index: 5;
+    font-size: 18px;
+    text-align: right;
+    text-shadow: 2px 2px 5px black;
+}
+
+#menu {
+    position: fixed;
+    inset: 0;
+    z-index: 20;
+    background: rgba(0,0,0,.95);
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    text-align: center;
+    padding: 20px;
+}
+
+#menu h1 {
+    font-size: clamp(38px, 7vw, 72px);
+    margin: 10px;
+}
+
+#menu p {
+    font-size: 18px;
+    max-width: 700px;
+}
+
+button {
+    margin-top: 15px;
+    padding: 16px 38px;
+    border: none;
+    border-radius: 14px;
+    font-size: 24px;
+    font-weight: bold;
+    cursor: pointer;
+}
+
+#flash {
+    position: fixed;
+    inset: 0;
+    pointer-events: none;
+    z-index: 10;
+    opacity: 0;
+}
+</style>
+</head>
+
+<body>
+
+<div id="ui">
+    ⭐ Puan: <span id="puan">0</span><br>
+    ❤️ Can: <span id="can">3</span><br>
+    ⚡ Seviye: <span id="seviye">1</span><br>
+    🔥 Combo: <span id="combo">0</span>
+</div>
+
+<div id="power">
+    💥 Özel güç: <span id="guc">HAZIR</span><br>
+    ⚡ Dash: <span id="dash">HAZIR</span>
+</div>
+
+<div id="bossBar">
+    <div id="bossName">👹 BOSS</div>
+    <div id="bossOuter">
+        <div id="bossInner"></div>
+    </div>
+</div>
+
+<div id="flash"></div>
+
+<div id="menu">
+    <h1>🔥 NEFES KESEN OYUN 🔥</h1>
+    <p>WASD / OK TUŞLARI: hareket</p>
+    <p>SHIFT: Dash</p>
+    <p>SPACE: Özel güç</p>
+    <p>🟡 Enerjileri topla. 🔴 Düşmanlardan kaç.</p>
+    <p>👹 Seviye 5'te BOSS gelir.</p>
+    <p>☠️ Seviye 10'da CEHENNEM MODU açılır.</p>
+    <button onclick="baslat()">BAŞLA</button>
+</div>
+
+<canvas id="oyun"></canvas>
+
+<script>
+"use strict";
+
+const canvas = document.getElementById("oyun");
+const ctx = canvas.getContext("2d");
+
+let oyuncu;
+let dusmanlar = [];
+let enerji = null;
+let parçaciklar = [];
+let boss = null;
+let mermiler = [];
+let dalga = [];
+let tuslar = {};
+
+let puan = 0;
+let can = 3;
+let seviye = 1;
+let combo = 0;
+
+let oyunAktif = false;
+let sonZaman = 0;
+
+let dashHazir = true;
+let gucHazir = true;
+
+let comboZamani = 0;
+let enerjiSayaci = 0;
+
+let cehennem = false;
+let ekranTitreme = 0;
+
+function boyutlandir() {
+    canvas.width = window.innerWidth;
+    canvas.height = window.innerHeight;
+}
+
+boyutlandir();
+window.addEventListener("resize", boyutlandir);
+
+document.addEventListener("keydown", function(e) {
+    const k = e.key.toLowerCase();
+
+    if (
+        ["arrowup","arrowdown","arrowleft","arrowright"," ","shift"].includes(k)
+    ) {
+        e.preventDefault();
+    }
+
+    if (!tuslar[k]) {
+        if (k === "shift") dash();
+        if (k === " ") ozelGuc();
+    }
+
+    tuslar[k] = true;
+});
+
+document.addEventListener("keyup", function(e) {
+    tuslar[e.key.toLowerCase()] = false;
+});
+
+function baslat() {
+    puan = 0;
+    can = 3;
+    seviye = 1;
+    combo = 0;
+
+    dashHazir = true;
+    gucHazir = true;
+
+    comboZamani = 0;
+    enerjiSayaci = 0;
+
+    cehennem = false;
+    ekranTitreme = 0;
+
+    dusmanlar = [];
+    parçaciklar = [];
+    mermiler = [];
+    dalga = [];
+
+    boss = null;
+
+    oyuncu = {
+        x: canvas.width / 2,
+        y: canvas.height / 2,
+        r: 18,
+        hiz: 5.5,
+        renk: "#00aaff",
+        dokunulmaz: 0
+    };
+
+    for (let i = 0; i < 3; i++) {
+        dusmanOlustur();
+    }
+
+    enerjiOlustur();
+
+    oyunAktif = true;
+
+    document.getElementById("menu").style.display = "none";
+    document.getElementById("bossBar").style.display = "none";
+
+    arayuz();
+
+    sonZaman = performance.now();
+    requestAnimationFrame(oyunDongusu);
+}
+
+function dusmanOlustur() {
+    const taraf = Math.floor(Math.random() * 4);
+
+    let x, y;
+
+    if (taraf === 0) {
+        x = -50;
+        y = Math.random() * canvas.height;
+    } else if (taraf === 1) {
+        x = canvas.width + 50;
+        y = Math.random() * canvas.height;
+    } else if (taraf === 2) {
+        x = Math.random() * canvas.width;
+        y = -50;
+    } else {
+        x = Math.random() * canvas.width;
+        y = canvas.height + 50;
+    }
+
+    dusmanlar.push({
+        x,
+        y,
+        r: 18 + Math.random() * 4,
+        hiz: 1.35 + seviye * 0.28 + (cehennem ? 1.2 : 0),
+        tip: Math.random() < 0.25 ? "hizli" : "normal"
+    });
+
+    if (dusmanlar[dusmanlar.length - 1].tip === "hizli") {
+        dusmanlar[dusmanlar.length - 1].hiz *= 1.45;
+        dusmanlar[dusmanlar.length - 1].r = 14;
+    }
+}
+
+function enerjiOlustur() {
+    enerji = {
+        x: 60 + Math.random() * Math.max(100, canvas.width - 120),
+        y: 80 + Math.random() * Math.max(100, canvas.height - 150),
+        r: 13,
+        donus: Math.random() * Math.PI * 2
+    };
+}
+
+function oyuncuHareket(dt) {
+    let dx = 0;
+    let dy = 0;
+
+    if (tuslar["w"] || tuslar["arrowup"]) dy--;
+    if (tuslar["s"] || tuslar["arrowdown"]) dy++;
+    if (tuslar["a"] || tuslar["arrowleft"]) dx--;
+    if (tuslar["d"] || tuslar["arrowright"]) dx++;
+
+    if (dx !== 0 || dy !== 0) {
+        const uzunluk = Math.hypot(dx, dy);
+        dx /= uzunluk;
+        dy /= uzunluk;
+
+        oyuncu.x += dx * oyuncu.hiz * (dt / 16.67);
+        oyuncu.y += dy * oyuncu.hiz * (dt / 16.67);
+    }
+
+    oyuncu.x = Math.max(oyuncu.r, Math.min(canvas.width - oyuncu.r, oyuncu.x));
+    oyuncu.y = Math.max(oyuncu.r, Math.min(canvas.height - oyuncu.r, oyuncu.y));
+
+    if (oyuncu.dokunulmaz > 0) {
+        oyuncu.dokunulmaz -= dt;
+    }
+}
+
+function dash() {
+    if (!oyunAktif || !dashHazir) return;
+
+    let dx = 0;
+    let dy = 0;
+
+    if (tuslar["w"] || tuslar["arrowup"]) dy--;
+    if (tuslar["s"] || tuslar["arrowdown"]) dy++;
+    if (tuslar["a"] || tuslar["arrowleft"]) dx--;
+    if (tuslar["d"] || tuslar["arrowright"]) dx++;
+
+    if (dx === 0 && dy === 0) {
+        dy = -1;
+    }
+
+    const uzunluk = Math.hypot(dx, dy);
+    dx /= uzunluk;
+    dy /= uzunluk;
+
+    oyuncu.x += dx * 130;
+    oyuncu.y += dy * 130;
+
+    oyuncu.x = Math.max(oyuncu.r, Math.min(canvas.width - oyuncu.r, oyuncu.x));
+    oyuncu.y = Math.max(oyuncu.r, Math.min(canvas.height - oyuncu.r, oyuncu.y));
+
+    oyuncu.dokunulmaz = 350;
+
+    dashHazir = false;
+    document.getElementById("dash").textContent = "BEKLE";
+
+    patlama(oyuncu.x, oyuncu.y, "#00ccff", 15);
+
+    setTimeout(() => {
+        if (oyunAktif) {
+            dashHazir = true;
+            document.getElementById("dash").textContent = "HAZIR";
+        }
+    }, Math.max(700, 1200 - seviye * 40));
+}
+
+function ozelGuc() {
+    if (!oyunAktif || !gucHazir) return;
+
+    gucHazir = false;
+    document.getElementById("guc").textContent = "KULLANILDI";
+
+    const yaricap = 230 + seviye * 8;
+
+    patlama(oyuncu.x, oyuncu.y, "#ffe600", 35);
+
+    for (let i = dusmanlar.length - 1; i >= 0; i--) {
+        const d = dusmanlar[i];
+
+        if (Math.hypot(oyuncu.x - d.x, oyuncu.y - d.y) < yaricap) {
+            dusmanlar.splice(i, 1);
+            puan++;
+        }
+    }
+
+    if (boss && Math.hypot(oyuncu.x - boss.x, oyuncu.y - boss.y) < yaricap) {
+        boss.can -= 18 + seviye * 2;
+    }
+
+    arayuz();
+
+    setTimeout(() => {
+        if (oyunAktif) {
+            gucHazir = true;
+            document.getElementById("guc").textContent = "HAZIR";
+        }
+    }, Math.max(2500, 5000 - seviye * 120));
+}
+
+function dusmanHareket(dt) {
+    for (const d of dusmanlar) {
+        const dx = oyuncu.x - d.x;
+        const dy = oyuncu.y - d.y;
+        const mesafe = Math.hypot(dx, dy);
+
+        if (mesafe > 0) {
+            d.x += (dx / mesafe) * d.hiz * (dt / 16.67);
+            d.y += (dy / mesafe) * d.hiz * (dt / 16.67);
+        }
+    }
+}
+
+function bossBaslat() {
+    if (boss || seviye < 5) return;
+
+    boss = {
+        x: canvas.width / 2,
+        y: -130,
+        r: 72,
+        hiz: 1.4 + seviye * 0.12,
+        can: 100 + seviye * 22,
+        maxCan: 100 + seviye * 22,
+        vurmaSayaci: 0,
+        atesSayaci: 0,
+        yon: 1
+    };
+
+    document.getElementById("bossBar").style.display = "block";
+}
+
+function bossHareket(dt) {
+    if (!boss) return;
+
+    if (boss.y < 120) {
+        boss.y += 2;
+    } else {
+        boss.x += boss.yon * boss.hiz * (dt / 16.67);
+
+        if (boss.x < boss.r || boss.x > canvas.width - boss.r) {
+            boss.yon *= -1;
+        }
+    }
+
+    boss.atesSayaci -= dt;
+
+    if (boss.atesSayaci <= 0) {
+        boss.atesSayaci = Math.max(350, 1000 - seviye * 45);
+
+        mermiler.push({
+            x: boss.x,
+            y: boss.y + boss.r,
+            vx: (oyuncu.x - boss.x) / Math.max(1, Math.hypot(oyuncu.x - boss.x, oyuncu.y - boss.y)) * 4.5,
+            vy: (oyuncu.y - boss.y) / Math.max(1, Math.hypot(oyuncu.x - boss.x, oyuncu.y - boss.y)) * 4.5,
+            r: 8
+        });
+    }
+
+    if (Math.hypot(oyuncu.x - boss.x, oyuncu.y - boss.y) < oyuncu.r + boss.r) {
+        oyuncuHasar();
+    }
+
+    bossCanKontrol();
+}
+
+function bossCanKontrol() {
+    if (!boss) return;
+
+    const oran = Math.max(0, boss.can / boss.maxCan);
+
+    document.getElementById("bossInner").style.width =
+        (oran * 100) + "%";
+
+    if (boss.can <= 0) {
+        puan += 10;
+        patlama(boss.x, boss.y, "#ff1744", 80);
+        boss = null;
+
+        document.getElementById("bossBar").style.display = "none";
+
+        arayuz();
+    }
+}
+
+function mermileriHareket(dt) {
+    for (let i = mermiler.length - 1; i >= 0; i--) {
+        const m = mermiler[i];
+
+        m.x += m.vx * (dt / 16.67);
+        m.y += m.vy * (dt / 16.67);
+
+        if (
+            m.x < -30 ||
+            m.x > canvas.width + 30 ||
+            m.y < -30 ||
+            m.y > canvas.height + 30
+        ) {
+            mermiler.splice(i, 1);
+            continue;
+        }
+
+        if (Math.hypot(oyuncu.x - m.x, oyuncu.y - m.y) < oyuncu.r + m.r) {
+            mermiler.splice(i, 1);
+            oyuncuHasar();
+        }
+    }
+}
+
+function oyuncuHasar() {
+    if (oyuncu.dokunulmaz > 0) return;
+
+    can--;
+    combo = 0;
+    oyuncu.dokunulmaz = 1000;
+
+    ekranTitreme = 14;
+    patlama(oyuncu.x, oyuncu.y, "#ffffff", 18);
+
+    oyuncu.x = canvas.width / 2;
+    oyuncu.y = canvas.height / 2;
+
+    arayuz();
+
+    if (can <= 0) {
+        oyunBitti();
+    }
+}
+
+function enerjiKontrol() {
+    if (!enerji) return;
+
+    if (
+        Math.hypot(
+            oyuncu.x - enerji.x,
+            oyuncu.y - enerji.y
+        ) < oyuncu.r + enerji.r
+    ) {
+        puan++;
+        combo++;
+        enerjiSayaci++;
+
+        comboZamani = 2200;
+
+        patlama(enerji.x, enerji.y, "#ffe600", 8);
+
+        enerjiOlustur();
+
+        if (combo >= 3) {
+            puan += 1;
+        }
+
+        if (puan >= seviye * 5) {
+            seviyeAtla();
+        }
+
+        if (seviye >= 5) {
+            bossBaslat();
+        }
+
+        arayuz();
+    }
+}
+
+function seviyeAtla() {
+    seviye++;
+
+    // Yeni düşmanlar
+    const adet = seviye >= 10 ? 4 : 2;
+
+    for (let i = 0; i < adet; i++) {
+        dusmanOlustur();
+    }
+
+    // CEHENNEM MODU
+    if (seviye >= 10 && !cehennem) {
+        cehennem = true;
+
+        // Oyun hızlanır
+        oyuncu.hiz += 1;
+
+        // Ek düşmanlar
+        for (let i = 0; i < 5; i++) {
+            dusmanOlustur();
+        }
+
+        patlama(canvas.width / 2, canvas.height / 2, "#ff1744", 100);
+    }
+
+    // Boss
+    if (seviye >= 5) {
+        bossBaslat();
+    }
+}
+
+function arayuz() {
+    document.getElementById("puan").textContent = puan;
+    document.getElementById("can").textContent = can;
+    document.getElementById("seviye").textContent = seviye;
+    document.getElementById("combo").textContent = combo;
+}
+
+function patlama(x, y, renk, miktar) {
+    for (let i = 0; i < miktar; i++) {
+        const aci = Math.random() * Math.PI * 2;
+        const hiz = 1 + Math.random() * 7;
+
+        parçaciklar.push({
+            x,
+            y,
+            vx: Math.cos(aci) * hiz,
+            vy: Math.sin(aci) * hiz,
+            hayat: 400 + Math.random() * 500,
+            maksimum: 900,
+            boyut: 2 + Math.random() * 5,
+            renk
+        });
+    }
+}
+
+function parçacikGuncelle(dt) {
+    for (let i = parçaciklar.length - 1; i >= 0; i--) {
+        const p = parçaciklar[i];
+
+        p.x += p.vx * (dt / 16.67);
+        p.y += p.vy * (dt / 16.67);
+
+        p.vx *= 0.98;
+        p.vy *= 0.98;
+
+        p.hayat -= dt;
+
+        if (p.hayat <= 0) {
+            parçaciklar.splice(i, 1);
+        }
+    }
+}
+
+function ciz() {
+    if (ekranTitreme > 0) {
+        ctx.save();
+
+        const tx = (Math.random() - 0.5) * ekranTitreme;
+        const ty = (Math.random() - 0.5) * ekranTitreme;
+
+        ctx.translate(tx, ty);
+
+        ekranTitreme *= 0.88;
+        if (ekranTitreme < 0.5) ekranTitreme = 0;
+    }
+
+    ctx.fillStyle = cehennem ? "#190406" : "#080808";
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+    // Izgara
+    ctx.strokeStyle = cehennem ? "#321010" : "#151515";
+    ctx.lineWidth = 1;
+
+    for (let x = 0; x < canvas.width; x += 50) {
+        ctx.beginPath();
+        ctx.moveTo(x, 0);
+        ctx.lineTo(x, canvas.height);
+        ctx.stroke();
+    }
+
+    for (let y = 0; y < canvas.height; y += 50) {
+        ctx.beginPath();
+        ctx.moveTo(0, y);
+        ctx.lineTo(canvas.width, y);
+        ctx.stroke();
+    }
+
+    // CEHENNEM EFEKTİ
+    if (cehennem) {
+        ctx.fillStyle = "rgba(255,0,0,0.035)";
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+    }
+
+    // Enerji
+    if (enerji) {
+        enerji.donus += 0.05;
+
+        ctx.save();
+        ctx.translate(enerji.x, enerji.y);
+        ctx.rotate(enerji.donus);
+
+        ctx.fillStyle = "#ffe600";
+        ctx.beginPath();
+
+        ctx.moveTo(0, -enerji.r);
+        ctx.lineTo(enerji.r, 0);
+        ctx.lineTo(0, enerji.r);
+        ctx.lineTo(-enerji.r, 0);
+        ctx.closePath();
+        ctx.fill();
+
+        ctx.restore();
+
+        ctx.strokeStyle = "#ffe600";
+        ctx.beginPath();
+        ctx.arc(
+            enerji.x,
+            enerji.y,
+            enerji.r + 9,
+            0,
+            Math.PI * 2
+        );
+        ctx.stroke();
+    }
+
+    // Düşmanlar
+    for (const d of dusmanlar) {
+        ctx.beginPath();
+        ctx.arc(d.x, d.y, d.r, 0, Math.PI * 2);
+
+        ctx.fillStyle =
+            d.tip === "hizli" ? "#ff7b00" : "#ff1744";
+
+        ctx.fill();
+
+        ctx.fillStyle = "white";
+
+        ctx.beginPath();
+        ctx.arc(d.x - 5, d.y - 4, 4, 0, Math.PI * 2);
+        ctx.arc(d.x + 5, d.y - 4, 4, 0, Math.PI * 2);
+        ctx.fill();
+
+        ctx.fillStyle = "black";
+
+        ctx.beginPath();
+        ctx.arc(d.x - 5, d.y - 4, 2, 0, Math.PI * 2);
+        ctx.arc(d.x + 5, d.y - 4, 2, 0, Math.PI * 2);
+        ctx.fill();
+    }
+
+    // Mermiler
+    for (const m of mermiler) {
+        ctx.beginPath();
+        ctx.arc(m.x, m.y, m.r, 0, Math.PI * 2);
+        ctx.fillStyle = "#ff66ff";
+        ctx.fill();
+    }
+
+    // Boss
+    if (boss) {
+        ctx.beginPath();
+        ctx.arc(boss.x, boss.y, boss.r, 0, Math.PI * 2);
+
+        ctx.fillStyle = "#8b0018";
+        ctx.fill();
+
+        ctx.strokeStyle = "#ff1744";
+        ctx.lineWidth = 7;
+        ctx.stroke();
+
+        // Boss gözleri
+        ctx.fillStyle = "white";
+
+        ctx.beginPath();
+        ctx.arc(boss.x - 22, boss.y - 12, 10, 0, Math.PI * 2);
+        ctx.arc(boss.x + 22, boss.y - 12, 10, 0, Math.PI * 2);
+        ctx.fill();
+
+        ctx.fillStyle = "black";
+
+        ctx.beginPath();
+        ctx.arc(boss.x - 22, boss.y - 12, 5, 0, Math.PI * 2);
+        ctx.arc(boss.x + 22, boss.y - 12, 5, 0, Math.PI * 2);
+        ctx.fill();
+
+        ctx.fillStyle = "#ffdddd";
+        ctx.fillRect(
+            boss.x - 28,
+            boss.y + 16,
+            56,
+            10
+        );
+    }
+
+    // Oyuncu
+    if (!oyuncu) {
+        if (ekranTitreme > 0) ctx.restore();
+        return;
+    }
+
+    const gorunur =
+        oyuncu.dokunulmaz <= 0 ||
+        Math.floor(oyuncu.dokunulmaz / 100) % 2 === 0;
+
+    if (gorunur) {
+        ctx.beginPath();
+        ctx.arc(
+            oyuncu.x,
+            oyuncu.y,
+            oyuncu.r,
+            0,
+            Math.PI * 2
+        );
+
+        ctx.fillStyle =
+            cehennem ? "#00ffff" : oyuncu.renk;
+
+        ctx.fill();
+
+        ctx.strokeStyle = "white";
+        ctx.lineWidth = 3;
+        ctx.stroke();
+    }
+
+    // Parçacıklar
+    for (const p of parçaciklar) {
+        ctx.globalAlpha = Math.max(0, p.hayat / p.maksimum);
+
+        ctx.beginPath();
+        ctx.arc(
+            p.x,
+            p.y,
+            p.boyut,
+            0,
+            Math.PI * 2
+        );
+
+        ctx.fillStyle = p.renk;
+        ctx.fill();
+    }
+
+    ctx.globalAlpha = 1;
+
+    if (ekranTitreme > 0) {
+        ctx.restore();
+    }
+}
+
+function oyunDongusu(zaman) {
+    if (!oyunAktif) return;
+
+    const dt = Math.min(40, zaman - sonZaman);
+    sonZaman = zaman;
+
+    oyuncuHareket(dt);
+    dusmanHareket(dt);
+    bossHareket(dt);
+    mermileriHareket(dt);
+    enerjiKontrol();
+    parçacikGuncelle(dt);
+
+    if (comboZamani > 0) {
+        comboZamani -= dt;
+
+        if (comboZamani <= 0) {
+            combo = 0;
+            arayuz();
+        }
+    }
+
+    ciz();
+
+    requestAnimationFrame(oyunDongusu);
+}
+
+function oyunBitti() {
+    oyunAktif = false;
+
+    document.getElementById("menu").style.display = "flex";
+    document.getElementById("bossBar").style.display = "none";
+
+    document.querySelector("#menu h1").textContent =
+        "💀 OYUN BİTTİ";
+
+    document.querySelector("#menu p").textContent =
+        "⭐ Skorun: " + puan;
+
+    document.querySelector("#menu p:nth-of-type(2)").textContent =
+        "⚡ Ulaştığın seviye: " + seviye;
+
+    document.querySelector("#menu p:nth-of-type(3)").textContent =
+        seviye >= 10
+            ? "☠️ CEHENNEM MODUNA ULAŞTIN!"
+            : "👹 Bir dahaki sefere BOSS'u yen!";
+
+    document.querySelector("#menu p:nth-of-type(4)").textContent =
+        "WASD/Ok: hareket • SHIFT: dash • SPACE: özel güç";
+
+    document.querySelector("#menu button").textContent =
+        "TEKRAR OYNA";
+}
+</script>
+
+<a href="index.html" aria-label="Ana sayfaya dön" title="Ana sayfa" style="position:fixed;right:16px;bottom:16px;z-index:2147483647;display:inline-flex;align-items:center;justify-content:center;min-height:44px;padding:0 16px;background:#d8f26a;color:#202820;border:2px solid #202820;border-radius:7px;font:700 14px Arial,sans-serif;text-decoration:none;box-shadow:3px 3px 0 #202820;">Ana sayfa</a>
+</body>
+</html>
+```

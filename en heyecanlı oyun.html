@@ -1,0 +1,353 @@
+```html
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+<meta charset="UTF-8">
+<title>NEFES KESEN OYUN</title>
+<style>
+    * { box-sizing:border-box; }
+    body {
+        margin:0;
+        overflow:hidden;
+        background:#050505;
+        font-family:Arial;
+        color:white;
+    }
+    canvas {
+        display:block;
+        width:100vw;
+        height:100vh;
+    }
+    #ui {
+        position:fixed;
+        top:15px;
+        left:20px;
+        z-index:5;
+        font-size:22px;
+        line-height:1.5;
+        text-shadow:2px 2px 4px black;
+    }
+    #menu {
+        position:fixed;
+        inset:0;
+        z-index:10;
+        background:rgba(0,0,0,.93);
+        display:flex;
+        flex-direction:column;
+        align-items:center;
+        justify-content:center;
+        text-align:center;
+    }
+    #menu h1 {
+        font-size:55px;
+        margin:10px;
+    }
+    button {
+        font-size:26px;
+        font-weight:bold;
+        padding:16px 40px;
+        border:0;
+        border-radius:15px;
+        cursor:pointer;
+    }
+</style>
+</head>
+
+<body>
+
+<div id="ui">
+    ⭐ Puan: <span id="puan">0</span><br>
+    ❤️ Can: <span id="can">3</span><br>
+    ⚡ Seviye: <span id="seviye">1</span>
+</div>
+
+<div id="menu">
+    <h1>🔥 NEFES KESEN OYUN 🔥</h1>
+    <p>WASD veya ok tuşlarıyla hareket et.</p>
+    <p>Kırmızı düşmanlardan kaç, sarı enerjileri topla!</p>
+    <button onclick="baslat()">BAŞLA</button>
+</div>
+
+<canvas id="canvas"></canvas>
+
+<script>
+const canvas = document.getElementById("canvas");
+const ctx = canvas.getContext("2d");
+
+function boyutlandir() {
+    canvas.width = innerWidth;
+    canvas.height = innerHeight;
+}
+boyutlandir();
+addEventListener("resize", boyutlandir);
+
+let oyuncu, dusmanlar, enerji;
+let puan = 0;
+let can = 3;
+let seviye = 1;
+let aktif = false;
+let tus = {};
+let sonZaman = 0;
+
+document.addEventListener("keydown", e => {
+    tus[e.key.toLowerCase()] = true;
+});
+
+document.addEventListener("keyup", e => {
+    tus[e.key.toLowerCase()] = false;
+});
+
+function baslat() {
+    puan = 0;
+    can = 3;
+    seviye = 1;
+
+    oyuncu = {
+        x:canvas.width/2,
+        y:canvas.height/2,
+        r:18,
+        hiz:6
+    };
+
+    dusmanlar = [];
+    enerji = null;
+
+    aktif = true;
+    document.getElementById("menu").style.display="none";
+
+    for(let i=0;i<3;i++) dusmanEkle();
+
+    enerjiEkle();
+
+    sonZaman = performance.now();
+    requestAnimationFrame(oyun);
+}
+
+function dusmanEkle() {
+
+    let kenar = Math.floor(Math.random()*4);
+    let x,y;
+
+    if(kenar===0) {
+        x=-30;
+        y=Math.random()*canvas.height;
+    } else if(kenar===1) {
+        x=canvas.width+30;
+        y=Math.random()*canvas.height;
+    } else if(kenar===2) {
+        x=Math.random()*canvas.width;
+        y=-30;
+    } else {
+        x=Math.random()*canvas.width;
+        y=canvas.height+30;
+    }
+
+    dusmanlar.push({
+        x:x,
+        y:y,
+        r:20,
+        hiz:1.5 + seviye*0.25
+    });
+}
+
+function enerjiEkle() {
+    enerji = {
+        x:50+Math.random()*(canvas.width-100),
+        y:50+Math.random()*(canvas.height-100),
+        r:12
+    };
+}
+
+function hareket() {
+
+    if(tus["w"] || tus["arrowup"])
+        oyuncu.y -= oyuncu.hiz;
+
+    if(tus["s"] || tus["arrowdown"])
+        oyuncu.y += oyuncu.hiz;
+
+    if(tus["a"] || tus["arrowleft"])
+        oyuncu.x -= oyuncu.hiz;
+
+    if(tus["d"] || tus["arrowright"])
+        oyuncu.x += oyuncu.hiz;
+
+    oyuncu.x=Math.max(oyuncu.r,
+        Math.min(canvas.width-oyuncu.r,oyuncu.x));
+
+    oyuncu.y=Math.max(oyuncu.r,
+        Math.min(canvas.height-oyuncu.r,oyuncu.y));
+}
+
+function dusmanHareket() {
+
+    for(let d of dusmanlar) {
+
+        let dx=oyuncu.x-d.x;
+        let dy=oyuncu.y-d.y;
+        let mesafe=Math.hypot(dx,dy);
+
+        if(mesafe>0) {
+            d.x += dx/mesafe*d.hiz;
+            d.y += dy/mesafe*d.hiz;
+        }
+    }
+}
+
+function carpismaKontrol() {
+
+    for(let i=dusmanlar.length-1;i>=0;i--) {
+
+        let d=dusmanlar[i];
+
+        if(Math.hypot(
+            oyuncu.x-d.x,
+            oyuncu.y-d.y
+        ) < oyuncu.r+d.r) {
+
+            can--;
+
+            document.getElementById("can").textContent=can;
+
+            oyuncu.x=canvas.width/2;
+            oyuncu.y=canvas.height/2;
+
+            dusmanlar.splice(i,1);
+
+            if(can<=0) {
+                bitir();
+                return;
+            }
+        }
+    }
+
+    if(enerji &&
+       Math.hypot(
+           oyuncu.x-enerji.x,
+           oyuncu.y-enerji.y
+       ) < oyuncu.r+enerji.r) {
+
+        puan++;
+
+        document.getElementById("puan").textContent=puan;
+
+        enerjiEkle();
+
+        if(puan%5===0) {
+            seviye++;
+
+            document.getElementById("seviye").textContent=seviye;
+
+            dusmanEkle();
+            dusmanEkle();
+        }
+    }
+}
+
+function ciz() {
+
+    ctx.fillStyle="#080808";
+    ctx.fillRect(0,0,canvas.width,canvas.height);
+
+    // Izgara
+    ctx.strokeStyle="#161616";
+    ctx.lineWidth=1;
+
+    for(let x=0;x<canvas.width;x+=50) {
+        ctx.beginPath();
+        ctx.moveTo(x,0);
+        ctx.lineTo(x,canvas.height);
+        ctx.stroke();
+    }
+
+    for(let y=0;y<canvas.height;y+=50) {
+        ctx.beginPath();
+        ctx.moveTo(0,y);
+        ctx.lineTo(canvas.width,y);
+        ctx.stroke();
+    }
+
+    // Enerji
+    if(enerji) {
+        ctx.beginPath();
+        ctx.arc(enerji.x,enerji.y,enerji.r,0,Math.PI*2);
+        ctx.fillStyle="#ffe600";
+        ctx.fill();
+
+        ctx.beginPath();
+        ctx.arc(enerji.x,enerji.y,enerji.r+7,0,Math.PI*2);
+        ctx.strokeStyle="#ffe600";
+        ctx.stroke();
+    }
+
+    // Düşmanlar
+    for(let d of dusmanlar) {
+
+        ctx.beginPath();
+        ctx.arc(d.x,d.y,d.r,0,Math.PI*2);
+        ctx.fillStyle="#ff1744";
+        ctx.fill();
+
+        ctx.fillStyle="white";
+        ctx.beginPath();
+        ctx.arc(d.x-6,d.y-5,4,0,Math.PI*2);
+        ctx.arc(d.x+6,d.y-5,4,0,Math.PI*2);
+        ctx.fill();
+    }
+
+    // Oyuncu
+    ctx.beginPath();
+    ctx.arc(oyuncu.x,oyuncu.y,oyuncu.r,0,Math.PI*2);
+    ctx.fillStyle="#00aaff";
+    ctx.fill();
+
+    ctx.strokeStyle="white";
+    ctx.lineWidth=3;
+    ctx.stroke();
+}
+
+function oyun(zaman) {
+
+    if(!aktif) return;
+
+    let dt=zaman-sonZaman;
+    sonZaman=zaman;
+
+    hareket();
+    dusmanHareket();
+    carpismaKontrol();
+
+    puan += dt/10000;
+
+    document.getElementById("puan").textContent =
+        Math.floor(puan);
+
+    ciz();
+
+    requestAnimationFrame(oyun);
+}
+
+function bitir() {
+
+    aktif=false;
+
+    document.getElementById("menu").style.display="flex";
+
+    document.querySelector("#menu h1").textContent =
+        "💀 OYUN BİTTİ";
+
+    document.querySelector("#menu p").textContent =
+        "Skorun: "+Math.floor(puan);
+
+    document.querySelector("#menu p:nth-of-type(2)").textContent =
+        "Ulaştığın seviye: "+seviye;
+
+    document.querySelector("#menu button").textContent =
+        "TEKRAR OYNA";
+}
+</script>
+
+<a href="index.html" aria-label="Ana sayfaya dön" title="Ana sayfa" style="position:fixed;right:16px;bottom:16px;z-index:2147483647;display:inline-flex;align-items:center;justify-content:center;min-height:44px;padding:0 16px;background:#d8f26a;color:#202820;border:2px solid #202820;border-radius:7px;font:700 14px Arial,sans-serif;text-decoration:none;box-shadow:3px 3px 0 #202820;">Ana sayfa</a>
+</body>
+</html>
+```
